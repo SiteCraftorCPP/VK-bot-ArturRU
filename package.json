@@ -1,0 +1,19 @@
+{
+  "name": "vk-bot-arturru",
+  "version": "1.0.0",
+  "description": "VK dating bot for Muslim audience",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "stop": "node scripts/stop.js",
+    "test": "node scripts/test-bot.js",
+    "check": "node --check src/index.js && node --check src/store.js && node --check src/keyboards.js && node --check scripts/stop.js && node --check scripts/test-bot.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "vk-io": "^4.10.1"
+  }
+}
