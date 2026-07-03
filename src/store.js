@@ -8,8 +8,8 @@ const defaultData = {
   users: {},
   likes: [],
   settings: {
-    channelUrl: '',
-    moderatorUrl: '',
+    channelUrl: 'https://vk.com/nikaxbot',
+    moderatorUrl: 'https://vk.com/rustambek_u',
   },
 };
 
@@ -47,6 +47,13 @@ class Store {
         ...(parsed.settings || {}),
       },
     };
+
+    if (!this.data.settings.channelUrl) {
+      this.data.settings.channelUrl = defaultData.settings.channelUrl;
+    }
+    if (!this.data.settings.moderatorUrl) {
+      this.data.settings.moderatorUrl = defaultData.settings.moderatorUrl;
+    }
   }
 
   save() {
@@ -71,7 +78,9 @@ class Store {
         name: '',
         about: '',
         photo: '',
+        photoUrl: '',
         active: true,
+        blocked: false,
         profileComplete: false,
         state: 'new',
         draft: {},
@@ -135,7 +144,9 @@ class Store {
       name: profile.name,
       about: profile.about,
       photo: profile.photo || '',
+      photoUrl: profile.photoUrl || '',
       active: true,
+      blocked: false,
       profileComplete: true,
       state: 'ready',
       draft: {},
@@ -156,6 +167,64 @@ class Store {
 
   listProfiles() {
     return Object.values(this.data.users);
+  }
+
+  listRealUsers(gender) {
+    return this.listProfiles()
+      .filter((user) => !user.isMock && user.gender === gender && user.profileComplete)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  listAdminPanelUsers(gender) {
+    return this.listProfiles()
+      .filter((user) => user.gender === gender && user.profileComplete)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  searchAdminPanelUsers(query, limit = 100) {
+    const value = String(query || '').trim().toLowerCase();
+    if (!value) {
+      return [];
+    }
+
+    const ageQuery = /^\d{1,2}$/.test(value) ? Number(value) : null;
+
+    return this.listProfiles()
+      .filter((user) => user.profileComplete)
+      .filter((user) => {
+        if (String(user.id).includes(value)) {
+          return true;
+        }
+        if (String(user.name || '').toLowerCase().includes(value)) {
+          return true;
+        }
+        if (String(user.city || '').toLowerCase().includes(value)) {
+          return true;
+        }
+        if (ageQuery !== null && user.age === ageQuery) {
+          return true;
+        }
+        return false;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
+  blockUser(id) {
+    return this.updateUser(id, { blocked: true, active: false, state: 'ready' });
+  }
+
+  unblockUser(id) {
+    return this.updateUser(id, { blocked: false, active: true, state: 'ready' });
+  }
+
+  deleteUser(id) {
+    const key = String(id);
+    delete this.data.users[key];
+    this.data.likes = this.data.likes.filter(
+      (like) => like.fromId !== key && like.toId !== key,
+    );
+    this.save();
   }
 
   isSubscribed(user) {

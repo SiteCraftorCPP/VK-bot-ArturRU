@@ -27,6 +27,7 @@ npm start
 - `npm install` — нужен один раз (или после обновления зависимостей). Зависимости ставятся локально в папку `node_modules` проекта.
 - `npm start` — запускает **один** экземпляр бота. Повторный запуск в другом окне будет заблокирован.
 - `npm run stop` — останавливает бота перед новым запуском.
+- `npm run fix-photos` — перезаливает фото анкет для корректной отправки через групповой токен (после деплоя или миграции).
 
 Файл `.env` уже должен содержать `VK_TOKEN` и `ADMIN_IDS`.
 
@@ -44,6 +45,8 @@ npm start
 sudo systemctl daemon-reload
 sudo systemctl enable vkbot-arturru
 sudo systemctl start vkbot-arturru
+cd /var/www/vk-bot-arturru
+npm run fix-photos
 ```
 
 Логи можно смотреть так: `sudo journalctl -u vkbot-arturru -f`

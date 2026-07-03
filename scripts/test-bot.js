@@ -73,13 +73,15 @@ function findNextProfile(store, user) {
 }
 
 function isProfileDataComplete(user) {
+  const profile = { ...user, ...user.draft };
   return Boolean(
-    user.gender
-    && user.age
-    && user.city
-    && user.name
-    && user.about
-    && user.about.length >= 30,
+    profile.gender
+    && profile.age
+    && profile.city
+    && profile.name
+    && profile.about
+    && profile.about.length >= 30
+    && profile.photo,
   );
 }
 
@@ -98,7 +100,7 @@ function runTests() {
   const store = new Store(tmpDb);
 
   store.ensureUser('100');
-  store.updateDraft('100', { gender: 'male', age: 25, city: 'Москва', name: 'Ali', about: 'x'.repeat(30), photo: '' });
+  store.updateDraft('100', { gender: 'male', age: 25, city: 'Москва', name: 'Ali', about: 'x'.repeat(30), photo: 'photo100_1' });
   store.completeProfile('100');
   const male = store.getUser('100');
   assert(male.profileComplete === true, 'profile completes from draft');
@@ -109,7 +111,26 @@ function runTests() {
     city: 'Москва',
     name: 'Aisha',
     about: 'y'.repeat(30),
+    photo: 'photo200_1',
   });
+
+  assert(store.listAdminPanelUsers('female').length === 1, 'admin panel lists mock profiles');
+  assert(store.listRealUsers('female').length === 0, 'real users list excludes mock profiles');
+
+  store.createMockProfile({
+    gender: 'male',
+    age: 31,
+    city: 'Казань',
+    name: 'Rustam',
+    about: 'z'.repeat(30),
+    photo: 'photo400_1',
+  });
+  const byName = store.searchAdminPanelUsers('rustam');
+  assert(byName.length === 1 && byName[0].name === 'Rustam', 'admin search by name');
+  const byCity = store.searchAdminPanelUsers('казань');
+  assert(byCity.some((user) => user.name === 'Rustam'), 'admin search by city');
+  const byAge = store.searchAdminPanelUsers('31');
+  assert(byAge.some((user) => user.age === 31), 'admin search by age');
 
   const match = findNextProfile(store, male);
   assert(Boolean(match), 'findNextProfile finds opposite gender in same city');
@@ -130,6 +151,19 @@ function runTests() {
   assert(adminMenu.includes('admin_add'), 'admin menu has add profile');
   assert(adminMenu.includes('admin_moderator'), 'admin menu has moderator link');
   assert(adminMenu.includes('admin_channel'), 'admin menu has channel link');
+
+  const usersMenu = keyboards.adminUsersMenu(2, 1).toString();
+  assert(usersMenu.includes('admin_users_gender'), 'admin users menu has gender sections');
+  assert(usersMenu.includes('admin_search'), 'admin users menu has search');
+
+  const profileKb = keyboards.adminUserProfile('100', 'male', 0, 3, false, 'gender', true).toString();
+  assert(profileKb.includes('admin_user_block'), 'admin profile has block');
+  assert(profileKb.includes('admin_user_delete'), 'admin profile has delete');
+  assert(profileKb.includes('admin_user_edit'), 'admin profile has edit for mock users');
+  assert(profileKb.includes('admin_users_gender'), 'admin profile has pagination');
+
+  const editKb = keyboards.adminEditProfile().toString();
+  assert(editKb.includes('admin_edit_field'), 'admin edit profile keyboard');
   
   // Test admin functionality
   const adminId = '100';
@@ -145,16 +179,27 @@ function runTests() {
   store.updateUser(adminId, { state: 'admin_add_photo' });
   store.createMockProfile({
     ...store.getUser(adminId).draft.adminProfile,
-    photo: '',
+    photo: 'photo300_1',
   });
   store.updateUser(adminId, { state: 'ready', draft: {} });
 
   const stats = store.getStats();
-  assert(stats.mock === 2, 'mock profiles are added and counted'); // 1 from earlier, 1 just now
+  assert(stats.mock === 3, 'mock profiles are added and counted');
   assert(stats.total >= 2, 'total profiles tracked');
+
+  assert(store.data.settings.channelUrl === 'https://vk.com/nikaxbot', 'default channel url');
+  assert(store.data.settings.moderatorUrl === 'https://vk.com/rustambek_u', 'default moderator url');
 
   store.updateSettings({ moderatorUrl: 'https://vk.com/mod' });
   assert(store.data.settings.moderatorUrl === 'https://vk.com/mod', 'moderator url updated');
+
+  store.blockUser('100');
+  assert(store.getUser('100').blocked === true, 'user blocked');
+  store.unblockUser('100');
+  assert(store.getUser('100').blocked === false, 'user unblocked');
+
+  store.deleteUser('100');
+  assert(store.getUser('100') === null, 'user deleted');
   debugLog('H4', 'scripts/test-bot.js', 'admin keyboard visibility', {
     adminHasButton: adminMenu.includes('admin'),
     userHasButton: userMenu.includes('admin'),
@@ -167,13 +212,22 @@ function runTests() {
     city: 'Казань',
     name: 'Zara',
     about: 'z'.repeat(30),
-    photo: '',
+    photo: 'photo200_2',
     profileComplete: false,
     state: 'ask_gender',
     draft: {},
   });
   const recovered = recoverUserState(store, store.getUser('200'));
   assert(recovered.state === 'confirm_profile', 'recover broken registration state');
+
+  store.completeProfile('300');
+  store.updateUser('300', {
+    state: 'admin_add_age',
+    draft: { adminProfile: { gender: 'male', country: '' } },
+  });
+  const adminFlow = recoverUserState(store, store.getUser('300'));
+  assert(adminFlow.state === 'admin_add_age', 'recover keeps active admin add flow');
+  assert(adminFlow.draft.adminProfile?.gender === 'male', 'recover keeps admin draft');
   debugLog('H2', 'scripts/test-bot.js', 'registration recovery', {
     beforeState: 'ask_gender',
     afterState: recovered.state,
