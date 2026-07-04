@@ -78,7 +78,8 @@ function isAdmin(userId) {
 
 function menuKeyboard(context, userId) {
   const id = context?.senderId ?? userId;
-  return keyboards.mainMenu(isAdmin(id));
+  const user = store.getUser(id);
+  return keyboards.mainMenu(isAdmin(id), user?.gender);
 }
 
 function parsePayload(context) {
@@ -694,7 +695,7 @@ async function sendMatch(firstUser, secondUser) {
     await sendToUser(
       firstUser.id,
       `У вас взаимная симпатия 🌙\nПрофиль партнёра: https://vk.com/id${secondUser.id}`,
-      keyboards.mainMenu(isAdmin(firstUser.id)),
+      keyboards.mainMenu(isAdmin(firstUser.id), firstUser.gender),
     );
   }
 
@@ -702,7 +703,7 @@ async function sendMatch(firstUser, secondUser) {
     await sendToUser(
       secondUser.id,
       `У вас взаимная симпатия 🌙\nПрофиль партнёра: https://vk.com/id${firstUser.id}`,
-      keyboards.mainMenu(isAdmin(secondUser.id)),
+      keyboards.mainMenu(isAdmin(secondUser.id), secondUser.gender),
     );
   }
 }
@@ -1525,6 +1526,12 @@ async function handlePayload(context, user, payload) {
     case 'pay_click':
       await context.send({
         message: 'Оплата пока не подключена. 💳',
+        keyboard: menuKeyboard(context, user.id),
+      });
+      return true;
+    case 'boost_top':
+      await context.send({
+        message: 'Поднятие в топ пока не подключено. 🔝',
         keyboard: menuKeyboard(context, user.id),
       });
       return true;

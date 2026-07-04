@@ -4,7 +4,7 @@ function payload(action, data = {}) {
   return { action, ...data };
 }
 
-function mainMenu(isAdmin = false) {
+function mainMenu(isAdmin = false, gender = null) {
   const keyboard = Keyboard.builder();
 
   if (isAdmin) {
@@ -20,8 +20,21 @@ function mainMenu(isAdmin = false) {
     .textButton({ label: 'Фильтр поиска 🔎', payload: payload('filters'), color: Keyboard.SECONDARY_COLOR })
     .textButton({ label: 'Лайки ❤️', payload: payload('all_likes'), color: Keyboard.SECONDARY_COLOR })
     .row()
-    .textButton({ label: 'Изменить анкету ✏️', payload: payload('edit_profile'), color: Keyboard.SECONDARY_COLOR })
-    .textButton({ label: 'Оплатить бот 💳', payload: payload('pay'), color: Keyboard.SECONDARY_COLOR })
+    .textButton({ label: 'Изменить анкету ✏️', payload: payload('edit_profile'), color: Keyboard.SECONDARY_COLOR });
+
+  if (gender === 'male') {
+    keyboard.textButton({ label: 'Оплатить бот 💳', payload: payload('pay'), color: Keyboard.SECONDARY_COLOR });
+  } else {
+    keyboard.textButton({ label: 'Поднять в топ 🔝', payload: payload('boost_top'), color: Keyboard.SECONDARY_COLOR });
+  }
+
+  if (gender === 'male') {
+    keyboard
+      .row()
+      .textButton({ label: 'Поднять в топ 🔝', payload: payload('boost_top'), color: Keyboard.SECONDARY_COLOR });
+  }
+
+  keyboard
     .row()
     .textButton({ label: 'Наш канал 🌙', payload: payload('channel'), color: Keyboard.SECONDARY_COLOR })
     .textButton({ label: 'Модератор 🤝', payload: payload('moderator'), color: Keyboard.SECONDARY_COLOR });

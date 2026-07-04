@@ -140,10 +140,14 @@ function runTests() {
   assert(parseAgeFilter('25')?.ageFrom === 25, 'parseAgeFilter single');
   assert(parseAgeFilter('abc') === null, 'parseAgeFilter invalid');
 
-  const adminMenuMainMenu = keyboards.mainMenu(true).toString();
-  const userMenu = keyboards.mainMenu(false).toString();
+  const adminMenuMainMenu = keyboards.mainMenu(true, 'male').toString();
+  const femaleMenu = keyboards.mainMenu(false, 'female').toString();
+  const maleMenu = keyboards.mainMenu(false, 'male').toString();
   assert(adminMenuMainMenu.includes('admin'), 'admin menu has admin button');
-  assert(!userMenu.includes('admin'), 'user menu hides admin button');
+  assert(femaleMenu.includes('boost_top'), 'female menu has boost top');
+  assert(!femaleMenu.includes('Оплатить бот'), 'female menu hides pay button');
+  assert(maleMenu.includes('boost_top'), 'male menu has boost top');
+  assert(maleMenu.includes('Оплатить бот'), 'male menu keeps pay button');
 
   const adminMenu = keyboards.admin().toString();
   assert(adminMenu.includes('admin_stats'), 'admin menu has stats');
