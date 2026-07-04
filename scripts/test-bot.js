@@ -206,7 +206,7 @@ function runTests() {
   assert(store.getUser('100') === null, 'user deleted');
   debugLog('H4', 'scripts/test-bot.js', 'admin keyboard visibility', {
     adminHasButton: adminMenu.includes('admin'),
-    userHasButton: userMenu.includes('admin'),
+    userHasButton: femaleMenu.includes('admin'),
   });
 
   const broken = store.ensureUser('200');
