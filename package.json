@@ -8,7 +8,7 @@
     "stop": "node scripts/stop.js",
     "fix-photos": "node scripts/fix-profile-photos.js",
     "test": "node scripts/test-bot.js",
-    "check": "node --check src/index.js && node --check src/store.js && node --check src/keyboards.js && node --check src/payments.js && node --check src/yookassa.js && node --check src/webhook-server.js && node --check scripts/stop.js && node --check scripts/test-bot.js"
+    "check": "node --check src/index.js && node --check src/store.js && node --check src/keyboards.js && node --check src/payments.js && node --check src/yookassa.js && node --check src/webhook-server.js && node --check src/browse.js && node --check scripts/stop.js && node --check scripts/test-bot.js"
   },
   "keywords": [],
   "author": "",

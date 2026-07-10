@@ -95,6 +95,7 @@ class Store {
         pendingLikeTarget: null,
         subscribedUntil: null,
         boostedUntil: null,
+        boostedAt: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -162,6 +163,7 @@ class Store {
       pendingLikeTarget: null,
       subscribedUntil: null,
       boostedUntil: null,
+      boostedAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

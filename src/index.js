@@ -7,6 +7,7 @@ const { Store } = require('./store');
 const keyboards = require('./keyboards');
 const payments = require('./payments');
 const yookassa = require('./yookassa');
+const { findNextProfile: pickNextProfile } = require('./browse');
 const { startWebhookServer } = require('./webhook-server');
 
 const LOCK_PATH = path.join(__dirname, '..', 'data', 'bot.lock');
@@ -110,10 +111,13 @@ async function fulfillProduct(userId, product) {
   if (product === 'boost') {
     const user = store.getUser(userId);
     const boostedUntil = payments.extendUntil(user.boostedUntil, config.boostDays);
-    store.updateUser(userId, { boostedUntil });
+    store.updateUser(userId, {
+      boostedUntil,
+      boostedAt: new Date().toISOString(),
+    });
     await sendToUser(
       userId,
-      `Оплата прошла успешно ✅\nАнкета поднята в топ до ${new Date(boostedUntil).toLocaleDateString('ru-RU')}.`,
+      `Оплата прошла успешно ✅\nАнкета поднята в топ на месяц (до ${new Date(boostedUntil).toLocaleDateString('ru-RU')}).`,
       menuKeyboardForUser(userId),
     );
   }
@@ -194,8 +198,8 @@ async function createYookassaPayment(context, product) {
         ].join('\n')
       : [
           'Поднятие анкеты в топ 🔝',
-          `Стоимость: ${amount} ₽ на ${config.boostDays} дней.`,
-          'Ваша анкета будет показываться первой в выдаче.',
+          `Стоимость: ${amount} ₽ на месяц (${config.boostDays} дней).`,
+          'Ваша анкета будет показываться первой среди анкет в вашем городе.',
           'Нажмите кнопку ниже — откроется страница оплаты ЮKassa.',
         ].join('\n');
 
@@ -764,39 +768,12 @@ async function showMyProfile(context, user) {
 }
 
 function findNextProfile(user) {
-  const wantedGender = user.gender === 'male' ? 'female' : 'male';
-  const skippedIds = new Set(
-    store.data.likes
-      .filter((like) => like.fromId === String(user.id))
-      .map((like) => like.toId),
+  return pickNextProfile(
+    user,
+    store.listProfiles(),
+    store.data.likes,
+    (profile) => store.isBoosted(profile),
   );
-
-  return store
-    .listProfiles()
-    .filter((profile) => profile.id !== String(user.id))
-    .filter((profile) => profile.profileComplete && profile.active)
-    .filter((profile) => profile.gender === wantedGender)
-    .filter((profile) => !skippedIds.has(profile.id))
-    .filter((profile) => {
-      const cityFilter = user.filters.city || user.city;
-      if (cityFilter && profile.city.toLowerCase() !== cityFilter.toLowerCase()) {
-        return false;
-      }
-
-      if (user.filters.country && profile.country.toLowerCase() !== user.filters.country.toLowerCase()) {
-        return false;
-      }
-
-      return profile.age >= user.filters.ageFrom && profile.age <= user.filters.ageTo;
-    })
-    .sort((a, b) => {
-      const aBoost = store.isBoosted(a);
-      const bBoost = store.isBoosted(b);
-      if (aBoost !== bBoost) {
-        return aBoost ? -1 : 1;
-      }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    })[0];
 }
 
 async function browseProfiles(context, user) {

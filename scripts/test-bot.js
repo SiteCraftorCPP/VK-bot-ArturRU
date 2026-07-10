@@ -5,6 +5,7 @@ const os = require('node:os');
 const { Store } = require('../src/store');
 const keyboards = require('../src/keyboards');
 const payments = require('../src/payments');
+const { findNextProfile, rankProfilesForBrowse } = require('../src/browse');
 
 function assert(condition, name) {
   if (!condition) {
@@ -25,30 +26,13 @@ function parseAgeFilter(text = '') {
   return null;
 }
 
-function findNextProfile(store, user) {
-  const wantedGender = user.gender === 'male' ? 'female' : 'male';
-  const skippedIds = new Set(
-    store.data.likes
-      .filter((like) => like.fromId === String(user.id))
-      .map((like) => like.toId),
+function findNextProfileFromStore(store, user) {
+  return findNextProfile(
+    user,
+    store.listProfiles(),
+    store.data.likes,
+    (profile) => store.isBoosted(profile),
   );
-
-  return store
-    .listProfiles()
-    .filter((profile) => profile.id !== String(user.id))
-    .filter((profile) => profile.profileComplete && profile.active)
-    .filter((profile) => profile.gender === wantedGender)
-    .filter((profile) => !skippedIds.has(profile.id))
-    .filter((profile) => {
-      const cityFilter = user.filters.city || user.city;
-      if (cityFilter && profile.city.toLowerCase() !== cityFilter.toLowerCase()) {
-        return false;
-      }
-      if (user.filters.country && profile.country.toLowerCase() !== user.filters.country.toLowerCase()) {
-        return false;
-      }
-      return profile.age >= user.filters.ageFrom && profile.age <= user.filters.ageTo;
-    })[0];
 }
 
 function isProfileDataComplete(user) {
@@ -111,8 +95,55 @@ function runTests() {
   const byAge = store.searchAdminPanelUsers('31');
   assert(byAge.some((user) => user.age === 31), 'admin search by age');
 
-  const match = findNextProfile(store, male);
+  const match = findNextProfileFromStore(store, male);
   assert(Boolean(match), 'findNextProfile finds opposite gender in same city');
+
+  store.createMockProfile({
+    gender: 'female',
+    age: 24,
+    city: 'Москва',
+    name: 'BoostedOld',
+    about: 'y'.repeat(30),
+    photo: 'photo201_1',
+  });
+  store.createMockProfile({
+    gender: 'female',
+    age: 25,
+    city: 'Москва',
+    name: 'Regular',
+    about: 'y'.repeat(30),
+    photo: 'photo202_1',
+  });
+  const boostedOld = store.listProfiles().find((user) => user.name === 'BoostedOld');
+  store.updateUser(boostedOld.id, {
+    boostedUntil: payments.extendUntil(null, 30),
+    boostedAt: '2026-01-01T00:00:00.000Z',
+  });
+  store.ensureUser('200');
+  store.updateUser('200', {
+    gender: 'female',
+    age: 26,
+    city: 'Москва',
+    name: 'BoostedNew',
+    about: 'z'.repeat(30),
+    photo: 'photo203_1',
+    profileComplete: true,
+    active: true,
+    state: 'ready',
+    boostedUntil: payments.extendUntil(null, 30),
+    boostedAt: '2026-06-01T00:00:00.000Z',
+  });
+
+  const ranked = rankProfilesForBrowse(
+    store.listProfiles().filter((profile) => profile.gender === 'female' && profile.city === 'Москва'),
+    (profile) => store.isBoosted(profile),
+  );
+  assert(ranked[0].name === 'BoostedNew', 'newer boost ranks first');
+  assert(ranked[1].name === 'BoostedOld', 'older boost ranks before regular profiles');
+  assert(ranked.some((profile) => profile.name === 'Regular'), 'regular profile stays in list');
+
+  const topForMale = findNextProfileFromStore(store, male);
+  assert(topForMale.name === 'BoostedNew', 'browse shows freshest boosted profile first');
 
   assert(parseAgeFilter('18-35')?.ageFrom === 18, 'parseAgeFilter range');
   assert(parseAgeFilter('25')?.ageFrom === 25, 'parseAgeFilter single');
@@ -177,7 +208,7 @@ function runTests() {
   store.updateUser(adminId, { state: 'ready', draft: {} });
 
   const stats = store.getStats();
-  assert(stats.mock === 3, 'mock profiles are added and counted');
+  assert(stats.mock === 5, 'mock profiles are added and counted');
   assert(stats.total >= 2, 'total profiles tracked');
 
   assert(store.data.settings.channelUrl === 'https://vk.com/nikaxbot', 'default channel url');
@@ -206,7 +237,7 @@ function runTests() {
   assert(store.hasSucceededYookassaPayment('pay_test_1'), 'payment marked as succeeded');
   store.updateUser('500', { subscribedUntil: payments.extendUntil(null, 30) });
   assert(store.isSubscribed(store.getUser('500')), 'subscription extension works');
-  store.updateUser('500', { boostedUntil: payments.extendUntil(null, 7) });
+  store.updateUser('500', { boostedUntil: payments.extendUntil(null, 30), boostedAt: new Date().toISOString() });
   assert(store.isBoosted(store.getUser('500')), 'boost extension works');
 
   const broken = store.ensureUser('200');
