@@ -75,6 +75,8 @@ if (!TOKEN) {
 
 const vk = new VK({ token: TOKEN });
 const store = new Store();
+const photoSourceUrlCache = new Map();
+const HISTORY_SCAN_COUNT = 40;
 
 function isAdmin(userId) {
   return ADMIN_IDS.includes(String(userId));
@@ -193,12 +195,12 @@ async function createYookassaPayment(context, product) {
       ? [
           'Оплата доступа к боту 💳',
           `Стоимость: ${amount} ₽ на ${config.subscriptionDays} дней.`,
+          'Платите один раз — никаких автосписаний и автопродлений.',
           'Нажмите кнопку ниже — откроется страница оплаты ЮKassa.',
-          'Платите один раз — никаких автосписаний.',
         ].join('\n')
       : [
           'Поднятие анкеты в топ 🔝',
-          `Стоимость: ${amount} ₽ на месяц (${config.boostDays} дней).`,
+          `Стоимость: ${amount} ₽ на месяц.`,
           'Ваша анкета будет показываться первой среди анкет в вашем городе.',
           'Нажмите кнопку ниже — откроется страница оплаты ЮKassa.',
         ].join('\n');
@@ -353,8 +355,27 @@ function pickPhotoFromContext(context) {
   return attachment ? attachment.toString() : '';
 }
 
+function photoUrlFromAttachment(context) {
+  const attachment = context.getAttachments?.('photo')?.[0];
+  if (!attachment) {
+    return '';
+  }
+
+  if (attachment.sizes?.length) {
+    return bestPhotoSizeUrl(attachment.sizes);
+  }
+  if (attachment.largeSizeUrl) {
+    return attachment.largeSizeUrl;
+  }
+  if (attachment.mediumSizeUrl) {
+    return attachment.mediumSizeUrl;
+  }
+
+  return '';
+}
+
 async function ensureAttachmentsLoaded(context) {
-  if (context.attachments?.length > 0) {
+  if (context.attachments?.length > 0 || photoUrlFromAttachment(context)) {
     return;
   }
 
@@ -365,16 +386,18 @@ async function ensureAttachmentsLoaded(context) {
   try {
     await context.loadMessagePayload({ force: Boolean(context.$filled) });
   } catch {
+    if (!context.id) {
+      return;
+    }
+
     try {
-      if (context.id) {
-        const { items } = await vk.api.messages.getById({ message_ids: context.id });
-        const [message] = items;
-        if (message?.attachments?.length && typeof context.applyPayload === 'function') {
-          context.applyPayload({
-            out: Number(context.isOutbox),
-            ...message,
-          });
-        }
+      const { items } = await vk.api.messages.getById({ message_ids: context.id });
+      const [message] = items;
+      if (message?.attachments?.length && typeof context.applyPayload === 'function') {
+        context.applyPayload({
+          out: Number(context.isOutbox),
+          ...message,
+        });
       }
     } catch {}
   }
@@ -383,7 +406,7 @@ async function ensureAttachmentsLoaded(context) {
 async function getPhotoAttachment(context) {
   await ensureAttachmentsLoaded(context);
 
-  let photo = pickPhotoFromContext(context);
+  const photo = pickPhotoFromContext(context);
   if (photo) {
     return photo;
   }
@@ -394,8 +417,7 @@ async function getPhotoAttachment(context) {
     } catch {}
   }
 
-  photo = pickPhotoFromContext(context);
-  return photo || '';
+  return pickPhotoFromContext(context) || '';
 }
 
 function parsePhotoAttachment(photo) {
@@ -428,15 +450,9 @@ function bestPhotoSizeUrl(sizes) {
 async function getPhotoUrlFromContext(context) {
   await ensureAttachmentsLoaded(context);
 
-  const attachment = context.getAttachments?.('photo')?.[0];
-  if (attachment?.sizes?.length) {
-    return bestPhotoSizeUrl(attachment.sizes);
-  }
-  if (attachment?.largeSizeUrl) {
-    return attachment.largeSizeUrl;
-  }
-  if (attachment?.mediumSizeUrl) {
-    return attachment.mediumSizeUrl;
+  const directUrl = photoUrlFromAttachment(context);
+  if (directUrl) {
+    return directUrl;
   }
 
   if (!context.id) {
@@ -454,10 +470,15 @@ async function getPhotoUrlFromContext(context) {
 }
 
 async function findPhotoUrlInHistory(peerId, photoRef = '', fromId = null) {
+  const cacheKey = `${peerId}:${fromId || 0}:${photoRef || '*'}`;
+  if (photoSourceUrlCache.has(cacheKey)) {
+    return photoSourceUrlCache.get(cacheKey);
+  }
+
   try {
     const { items } = await vk.api.messages.getHistory({
       peer_id: Number(peerId),
-      count: 100,
+      count: HISTORY_SCAN_COUNT,
     });
 
     for (const item of items) {
@@ -477,6 +498,7 @@ async function findPhotoUrlInHistory(peerId, photoRef = '', fromId = null) {
 
         const url = bestPhotoSizeUrl(attachment.photo?.sizes);
         if (url) {
+          photoSourceUrlCache.set(cacheKey, url);
           return url;
         }
       }
@@ -485,6 +507,7 @@ async function findPhotoUrlInHistory(peerId, photoRef = '', fromId = null) {
     console.error('findPhotoUrlInHistory:', error.message);
   }
 
+  photoSourceUrlCache.set(cacheKey, '');
   return '';
 }
 
@@ -497,34 +520,41 @@ async function resolvePhotoSourceUrl(profile) {
     return '';
   }
 
+  const cacheKey = `profile:${profile.id}`;
+  if (photoSourceUrlCache.has(cacheKey)) {
+    return photoSourceUrlCache.get(cacheKey);
+  }
+
   const parsed = parsePhotoAttachment(profile.photo);
   const photoRef = parsed?.ref || '';
+  let sourceUrl = '';
 
   if (!profile.isMock) {
-    const fromUser = await findPhotoUrlInHistory(profile.id, photoRef, Number(profile.id));
-    if (fromUser) {
-      return fromUser;
-    }
-
-    const anyFromUser = await findPhotoUrlInHistory(profile.id, '', Number(profile.id));
-    if (anyFromUser) {
-      return anyFromUser;
+    sourceUrl = await findPhotoUrlInHistory(profile.id, photoRef, Number(profile.id));
+    if (!sourceUrl) {
+      sourceUrl = await findPhotoUrlInHistory(profile.id, '', Number(profile.id));
     }
   }
 
-  for (const adminId of ADMIN_IDS) {
-    const fromAdminChat = await findPhotoUrlInHistory(adminId, photoRef);
-    if (fromAdminChat) {
-      return fromAdminChat;
-    }
-
-    const anyFromAdminChat = await findPhotoUrlInHistory(adminId, '');
-    if (anyFromAdminChat) {
-      return anyFromAdminChat;
+  if (!sourceUrl) {
+    for (const adminId of ADMIN_IDS) {
+      sourceUrl = await findPhotoUrlInHistory(adminId, photoRef);
+      if (sourceUrl) {
+        break;
+      }
+      sourceUrl = await findPhotoUrlInHistory(adminId, '');
+      if (sourceUrl) {
+        break;
+      }
     }
   }
 
-  return '';
+  photoSourceUrlCache.set(cacheKey, sourceUrl || '');
+  if (sourceUrl && profile?.id) {
+    store.updateUser(profile.id, { photoUrl: sourceUrl });
+  }
+
+  return sourceUrl;
 }
 
 async function uploadPhotoFromUrl(url, peerId) {
@@ -543,17 +573,19 @@ async function uploadPhotoFromUrl(url, peerId) {
 }
 
 async function uploadPhotoForPeer(profile, peerId) {
-  const existing = profile?.photo || '';
+  const freshProfile = profile?.id ? store.getUser(profile.id) : profile;
+  const existing = freshProfile?.photo || profile?.photo || '';
   if (existing && isSendablePhoto(existing)) {
     return existing;
   }
 
-  const sourceUrl = await resolvePhotoSourceUrl(profile);
+  const sourceUrl = await resolvePhotoSourceUrl(freshProfile || profile);
   if (!sourceUrl) {
     return '';
   }
 
-  const sendable = await uploadPhotoFromUrl(sourceUrl, peerId);
+  const uploadPeerId = Number(peerId) || Number(ADMIN_IDS[0]) || Number(profile?.id);
+  const sendable = await uploadPhotoFromUrl(sourceUrl, uploadPeerId);
   if (profile?.id) {
     store.updateUser(profile.id, { photo: sendable, photoUrl: sourceUrl });
   }
@@ -561,16 +593,18 @@ async function uploadPhotoForPeer(profile, peerId) {
 }
 
 async function resolveProfilePhoto(profile, peerId) {
-  if (!profile?.photo) {
+  const freshProfile = profile?.id ? store.getUser(profile.id) : profile;
+  const photo = freshProfile?.photo || profile?.photo || '';
+  if (!photo) {
     return '';
   }
 
-  if (isSendablePhoto(profile.photo)) {
-    return profile.photo;
+  if (isSendablePhoto(photo)) {
+    return photo;
   }
 
   try {
-    return await uploadPhotoForPeer(profile, peerId);
+    return await uploadPhotoForPeer(freshProfile || profile, peerId);
   } catch (error) {
     console.error('resolveProfilePhoto:', error.message);
     return '';
@@ -582,13 +616,17 @@ async function persistIncomingPhoto(context, photo) {
     return { photo: '', photoUrl: '' };
   }
 
-  const photoUrl = await getPhotoUrlFromContext(context);
-  const peerId = context.peerId || context.senderId;
+  await ensureAttachmentsLoaded(context);
+  let photoUrl = photoUrlFromAttachment(context);
+  if (!photoUrl) {
+    photoUrl = await getPhotoUrlFromContext(context);
+  }
 
   if (!photoUrl) {
     return { photo, photoUrl: '' };
   }
 
+  const peerId = context.peerId || context.senderId;
   try {
     const sendable = await uploadPhotoFromUrl(photoUrl, peerId);
     return { photo: sendable, photoUrl };

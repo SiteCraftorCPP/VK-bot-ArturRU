@@ -33,8 +33,8 @@ YOOKASSA_SHOP_ID=shop_id
 YOOKASSA_SECRET_KEY=secret_key
 YOOKASSA_TEST_MODE=true
 
-SUBSCRIPTION_AMOUNT=1
-BOOST_AMOUNT=1
+SUBSCRIPTION_AMOUNT=600
+BOOST_AMOUNT=1200
 SUBSCRIPTION_DAYS=30
 BOOST_DAYS=30
 
@@ -43,7 +43,7 @@ WEBHOOK_PATH=/yookassa/webhook
 YOOKASSA_RETURN_URL=https://vk.com
 ```
 
-Суммы `SUBSCRIPTION_AMOUNT` и `BOOST_AMOUNT` задаются в рублях. Для тестов по умолчанию стоит **1 ₽**.
+Суммы `SUBSCRIPTION_AMOUNT` (подписка) и `BOOST_AMOUNT` (топ) задаются в рублях. По умолчанию: **600 ₽** и **1200 ₽**.
 
 ## Запуск
 
