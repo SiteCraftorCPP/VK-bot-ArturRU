@@ -1,47 +1,91 @@
 # VKBOT ArturRU
 
-MVP VK-бота для знакомств мусульман с анкетами, лайками, фильтрами, заглушкой оплаты и админ-панелью.
+VK-бот для знакомств: анкеты, лайки, фильтры, админ-панель.
 
 ## Возможности
 
-- Пошаговая регистрация анкеты: пол, возраст, город, имя, описание, фото.
-- Проверка возраста 18-80 и запрет личных контактов в описании.
+- Регистрация анкеты: пол, возраст, город, имя, описание, фото.
 - Просмотр анкет противоположного пола по городу и фильтрам.
-- Лайки, уведомления о симпатии и взаимная симпатия со ссылками на VK-профили.
-- Для мужчин лайк закрыт заглушкой оплаты 600 ₽, девушки лайкают бесплатно.
-- Команды: `/my_profile`, `/browse_profiles`, `/filters`, `/edit_profile`, `/all_likes`, `/chanel`, `/moderator`, `/pay_for_bot`, `/delete`, `/restore`.
-- Админ-панель: статистика, список пользователей, добавление тестовых анкет, настройка ссылок канала и модератора.
-- Локальное JSON-хранилище в `data/db.json`.
+- Лайки, уведомления о симпатии и взаимная симпатия.
+- Для мужчин лайки доступны после оплаты подписки; для девушек — бесплатно.
+- Кнопка «Поднять в топ 🔝» в меню (у мужчин — вместе с оплатой).
+- Админ-панель: статистика, пользователи, поиск, блокировка, тестовые анкеты, ссылки канала и модератора.
+- Данные хранятся локально в `data/db.json`.
 
-## Запуск (Windows, один экземпляр)
+## Требования
 
-Откройте PowerShell и выполните команды **по порядку**:
+- Node.js 18+
+- Токен группы VK с доступом к сообщениям
+- Long Poll включён в настройках группы
+- Магазин ЮKassa (тестовый или боевой)
 
-```powershell
-cd "C:\Users\MOD PC COMPANY\Desktop\VK bot ArturRU"
-npm run stop
+## Настройка
+
+```bash
+cp .env.example .env
+```
+
+```env
+VK_TOKEN=токен_группы
+ADMIN_IDS=123456789
+
+YOOKASSA_SHOP_ID=shop_id
+YOOKASSA_SECRET_KEY=secret_key
+YOOKASSA_TEST_MODE=true
+
+SUBSCRIPTION_AMOUNT=1
+BOOST_AMOUNT=1
+SUBSCRIPTION_DAYS=30
+BOOST_DAYS=7
+
+WEBHOOK_PORT=3001
+WEBHOOK_PATH=/yookassa/webhook
+YOOKASSA_RETURN_URL=https://vk.com
+```
+
+Суммы `SUBSCRIPTION_AMOUNT` и `BOOST_AMOUNT` задаются в рублях. Для тестов по умолчанию стоит **1 ₽**.
+
+## Запуск
+
+```bash
 npm install
+npm run stop
 npm start
 ```
 
-- `npm install` — нужен один раз (или после обновления зависимостей). Зависимости ставятся локально в папку `node_modules` проекта.
-- `npm start` — запускает **один** экземпляр бота. Повторный запуск в другом окне будет заблокирован.
-- `npm run stop` — останавливает бота перед новым запуском.
-- `npm run fix-photos` — перезаливает фото анкет для корректной отправки через групповой токен (после деплоя или миграции).
+- `npm run stop` — остановить бота перед перезапуском
+- `npm run fix-photos` — перезалить фото анкет для группового токена
+- `npm test` — автотесты
+- `npm run check` — проверка синтаксиса
 
-Файл `.env` уже должен содержать `VK_TOKEN` и `ADMIN_IDS`.
+## ЮKassa
 
-## Развертывание на VPS (Systemd)
+1. Создайте платёж — бот отправляет ссылку ЮKassa в VK (кнопка `open_link`).
+2. Webhook — бот поднимает HTTP-сервер на `WEBHOOK_PORT` по пути `WEBHOOK_PATH`.
+3. В личном кабинете ЮKassa укажите URL webhook, например:
+   `https://ваш-домен.ru/yookassa/webhook`
+4. Включите событие `payment.succeeded`.
 
-Для работы бота в фоновом режиме на Linux-сервере используйте systemd:
+На VPS проксируйте порт через nginx:
 
-1. Склонируйте репозиторий на сервер (например, в `/var/www/vk-bot-arturru`).
-2. Установите зависимости `npm install`.
-3. Создайте `.env` и впишите настройки.
-4. Отредактируйте пути в `vkbot-arturru.service` под вашу папку.
-5. Скопируйте сервис: `sudo cp vkbot-arturru.service /etc/systemd/system/`
-6. Запустите:
+```nginx
+location /yookassa/webhook {
+    proxy_pass http://127.0.0.1:3001/yookassa/webhook;
+}
+```
+
+После успешной оплаты подписки мужчине активируется доступ к лайкам. После оплаты «Поднять в топ» анкета показывается первой в выдаче.
+
+## VPS (systemd)
+
+1. Склонировать в отдельную папку, например `/var/www/vk-bot-arturru`
+2. `npm install`
+3. Создать `.env`
+4. Поправить пути в `vkbot-arturru.service`
+5. Установить сервис:
+
 ```bash
+sudo cp vkbot-arturru.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable vkbot-arturru
 sudo systemctl start vkbot-arturru
@@ -49,18 +93,15 @@ cd /var/www/vk-bot-arturru
 npm run fix-photos
 ```
 
-Логи можно смотреть так: `sudo journalctl -u vkbot-arturru -f`
+Логи: `sudo journalctl -u vkbot-arturru -f`
 
-Доступна только ID из `ADMIN_IDS`:
-- команда `/admin`
-- кнопка **«Админ-панель ⚙️»** в меню (видна только админам)
-
-## Проверка кода
+## Обновление
 
 ```bash
-npm run check
+cd /var/www/vk-bot-arturru
+npm run stop
+git pull
+npm install
+npm test
+sudo systemctl restart vkbot-arturru
 ```
-
-## Оплата
-
-Платёжная система пока не подключена по ТЗ. Кнопка `Заплатить 600 ₽` уже есть, но при нажатии показывает заглушку. Когда будет выбран провайдер платежей, нужно обработать успешный платёж, выставить пользователю `subscribedUntil` на 30 дней и отправить отложенный лайк из `pendingLikeTarget`.

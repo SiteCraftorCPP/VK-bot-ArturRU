@@ -5,7 +5,6 @@ After=network.target
 [Service]
 Type=simple
 User=root
-# Укажите правильный путь до папки проекта на вашем VPS, например /var/www/vk-bot-arturru
 WorkingDirectory=/var/www/vk-bot-arturru
 ExecStart=/usr/bin/npm start
 Restart=on-failure
@@ -13,7 +12,6 @@ RestartSec=10
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=vkbot-arturru
-# Укажите путь до .env файла
 EnvironmentFile=/var/www/vk-bot-arturru/.env
 
 [Install]

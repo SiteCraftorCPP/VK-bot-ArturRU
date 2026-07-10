@@ -5,6 +5,9 @@ const path = require('node:path');
 const { VK } = require('vk-io');
 const { Store } = require('./store');
 const keyboards = require('./keyboards');
+const payments = require('./payments');
+const yookassa = require('./yookassa');
+const { startWebhookServer } = require('./webhook-server');
 
 const LOCK_PATH = path.join(__dirname, '..', 'data', 'bot.lock');
 
@@ -50,13 +53,13 @@ acquireLock();
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('UNCAUGHT EXCEPTION:', error);
+  console.error('Критическая ошибка:', error);
   releaseLock();
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (reason) => {
+  console.error('Необработанное отклонение промиса:', reason);
 });
 
 const TOKEN = process.env.VK_TOKEN;
@@ -66,7 +69,7 @@ const ADMIN_IDS = (process.env.ADMIN_IDS || '')
   .filter(Boolean);
 
 if (!TOKEN) {
-  throw new Error('VK_TOKEN is required. Copy .env.example to .env and set your group token.');
+  throw new Error('Укажите VK_TOKEN в файле .env');
 }
 
 const vk = new VK({ token: TOKEN });
@@ -80,6 +83,133 @@ function menuKeyboard(context, userId) {
   const id = context?.senderId ?? userId;
   const user = store.getUser(id);
   return keyboards.mainMenu(isAdmin(id), user?.gender);
+}
+
+function menuKeyboardForUser(userId) {
+  const user = store.getUser(userId);
+  return keyboards.mainMenu(isAdmin(userId), user?.gender);
+}
+
+async function fulfillProduct(userId, product) {
+  const config = payments.getPaymentConfig();
+  store.ensureUser(userId);
+
+  if (product === 'subscription') {
+    const user = store.getUser(userId);
+    const subscribedUntil = payments.extendUntil(user.subscribedUntil, config.subscriptionDays);
+    store.updateUser(userId, { subscribedUntil });
+    await sendToUser(
+      userId,
+      `Оплата прошла успешно ✅\nДоступ к лайкам активен до ${new Date(subscribedUntil).toLocaleDateString('ru-RU')}.`,
+      menuKeyboardForUser(userId),
+    );
+    await fulfillPendingLike(userId);
+    return;
+  }
+
+  if (product === 'boost') {
+    const user = store.getUser(userId);
+    const boostedUntil = payments.extendUntil(user.boostedUntil, config.boostDays);
+    store.updateUser(userId, { boostedUntil });
+    await sendToUser(
+      userId,
+      `Оплата прошла успешно ✅\nАнкета поднята в топ до ${new Date(boostedUntil).toLocaleDateString('ru-RU')}.`,
+      menuKeyboardForUser(userId),
+    );
+  }
+}
+
+async function onYookassaWebhook(payload) {
+  if (payload?.event !== 'payment.succeeded' || !payload?.object?.id) {
+    return;
+  }
+
+  const paymentId = payload.object.id;
+  if (store.hasSucceededYookassaPayment(paymentId)) {
+    return;
+  }
+
+  const verified = await yookassa.fetchPayment(paymentId);
+  if (verified.status !== 'succeeded') {
+    return;
+  }
+
+  const userId = verified.metadata?.user_id;
+  const product = verified.metadata?.product;
+  if (!userId || !product) {
+    console.error('ЮKassa: нет metadata в платеже', paymentId);
+    return;
+  }
+
+  const expectedAmount = payments.getProductAmount(product);
+  if (payments.formatAmount(verified.amount?.value) !== payments.formatAmount(expectedAmount)) {
+    console.error('ЮKassa: сумма не совпадает', paymentId, verified.amount?.value, expectedAmount);
+    return;
+  }
+
+  store.completeYookassaPayment(paymentId);
+  await fulfillProduct(userId, product);
+}
+
+async function createYookassaPayment(context, product) {
+  const config = payments.getPaymentConfig();
+  if (!payments.isPaymentConfigured()) {
+    await context.send({
+      message: 'Оплата временно недоступна. Обратитесь к модератору.',
+      keyboard: menuKeyboard(context, context.senderId),
+    });
+    return;
+  }
+
+  const userId = String(context.senderId);
+  const amount = payments.getProductAmount(product, config);
+  const description = payments.getProductDescription(product, config);
+
+  try {
+    const payment = await yookassa.createPayment({
+      userId,
+      product,
+      amount,
+      description,
+    });
+
+    if (!payment.confirmationUrl) {
+      throw new Error('Не получена ссылка на оплату');
+    }
+
+    store.createPendingPayment({
+      yookassaPaymentId: payment.id,
+      userId,
+      product,
+      amount,
+    });
+
+    const testNote = config.testMode ? '\n\n🧪 Тестовый режим ЮKassa.' : '';
+    const productText = product === 'subscription'
+      ? [
+          'Оплата доступа к боту 💳',
+          `Стоимость: ${amount} ₽ на ${config.subscriptionDays} дней.`,
+          'Нажмите кнопку ниже — откроется страница оплаты ЮKassa.',
+          'Платите один раз — никаких автосписаний.',
+        ].join('\n')
+      : [
+          'Поднятие анкеты в топ 🔝',
+          `Стоимость: ${amount} ₽ на ${config.boostDays} дней.`,
+          'Ваша анкета будет показываться первой в выдаче.',
+          'Нажмите кнопку ниже — откроется страница оплаты ЮKassa.',
+        ].join('\n');
+
+    await context.send({
+      message: `${productText}${testNote}`,
+      keyboard: keyboards.paymentUrl(`Оплатить ${amount} ₽`, payment.confirmationUrl),
+    });
+  } catch (error) {
+    console.error('Ошибка создания платежа ЮKassa:', error.message);
+    await context.send({
+      message: 'Не удалось создать платёж. Попробуйте позже или напишите модератору.',
+      keyboard: menuKeyboard(context, context.senderId),
+    });
+  }
 }
 
 function parsePayload(context) {
@@ -242,9 +372,7 @@ async function ensureAttachmentsLoaded(context) {
           });
         }
       }
-    } catch {
-      // VK иногда отдаёт вложения только после повторного запроса сообщения
-    }
+    } catch {}
   }
 }
 
@@ -660,6 +788,14 @@ function findNextProfile(user) {
       }
 
       return profile.age >= user.filters.ageFrom && profile.age <= user.filters.ageTo;
+    })
+    .sort((a, b) => {
+      const aBoost = store.isBoosted(a);
+      const bBoost = store.isBoosted(b);
+      if (aBoost !== bBoost) {
+        return aBoost ? -1 : 1;
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     })[0];
 }
 
@@ -708,25 +844,10 @@ async function sendMatch(firstUser, secondUser) {
   }
 }
 
-async function handleLike(context, user, profileId, isBackLike = false) {
+async function executeLike(user, profileId) {
   const target = store.getUser(profileId);
   if (!target || !target.profileComplete || !target.active) {
-    await context.send({ message: 'Эта анкета уже недоступна.' });
-    return;
-  }
-
-  if (user.gender === 'male' && !store.isSubscribed(user)) {
-    store.updateUser(user.id, { pendingLikeTarget: target.id });
-    await context.send({
-      message: [
-        'Только мужчинам.',
-        'Чтобы ставить лайки, оплатите доступ к боту.',
-        'Нажмите «Заплатить».',
-        'Платите один раз — никаких автосписаний и подписок. Доступ действует 30 дней, затем вы сами решаете, продлевать или нет.',
-      ].join('\n'),
-      keyboard: keyboards.pay(),
-    });
-    return;
+    return { ok: false, reason: 'unavailable' };
   }
 
   store.addLike(user.id, target.id, 'pending');
@@ -736,10 +857,47 @@ async function handleLike(context, user, profileId, isBackLike = false) {
     store.addLike(user.id, target.id, 'matched');
     store.addLike(target.id, user.id, 'matched');
     await sendMatch(user, target);
-    return;
+    return { ok: true, matched: true };
   }
 
   await notifyLike(user, target);
+  return { ok: true, matched: false };
+}
+
+async function fulfillPendingLike(userId) {
+  const user = store.getUser(userId);
+  if (!user?.pendingLikeTarget) {
+    return;
+  }
+
+  const targetId = user.pendingLikeTarget;
+  store.updateUser(userId, { pendingLikeTarget: null });
+  await executeLike(user, targetId);
+}
+
+async function handleLike(context, user, profileId, isBackLike = false) {
+  const target = store.getUser(profileId);
+  if (!target || !target.profileComplete || !target.active) {
+    await context.send({ message: 'Эта анкета уже недоступна.' });
+    return;
+  }
+
+  if (user.gender === 'male' && !store.isSubscribed(user)) {
+    store.updateUser(user.id, { pendingLikeTarget: target.id });
+    await createYookassaPayment(context, 'subscription');
+    return;
+  }
+
+  const result = await executeLike(user, profileId);
+  if (!result.ok) {
+    await context.send({ message: 'Эта анкета уже недоступна.' });
+    return;
+  }
+
+  if (result.matched) {
+    return;
+  }
+
   await context.send({
     message: isBackLike ? 'Симпатия отправлена ❤️' : 'Симпатия отправлена ❤️ Показываю следующую анкету.',
   });
@@ -785,14 +943,11 @@ async function showIncomingLikes(context, user) {
 }
 
 async function showPay(context) {
-  await context.send({
-    message: [
-      'Оплата доступа к боту 💳',
-      'Стоимость: 600 ₽.',
-      'Платёжная система будет подключена на последнем этапе, поэтому сейчас кнопка только подготовлена.',
-    ].join('\n'),
-    keyboard: keyboards.pay(),
-  });
+  await createYookassaPayment(context, 'subscription');
+}
+
+async function showBoostTop(context) {
+  await createYookassaPayment(context, 'boost');
 }
 
 async function showChannel(context) {
@@ -1523,17 +1678,8 @@ async function handlePayload(context, user, payload) {
     case 'pay':
       await showPay(context);
       return true;
-    case 'pay_click':
-      await context.send({
-        message: 'Оплата пока не подключена. 💳',
-        keyboard: menuKeyboard(context, user.id),
-      });
-      return true;
     case 'boost_top':
-      await context.send({
-        message: 'Поднятие в топ пока не подключено. 🔝',
-        keyboard: menuKeyboard(context, user.id),
-      });
+      await showBoostTop(context);
       return true;
     case 'channel':
       await showChannel(context);
@@ -1893,11 +2039,23 @@ vk.updates.on('message_new', async (context) => {
   }
 });
 
+const paymentConfig = payments.getPaymentConfig();
+if (payments.isPaymentConfigured()) {
+  startWebhookServer({
+    port: paymentConfig.webhookPort,
+    path: paymentConfig.webhookPath,
+    onEvent: onYookassaWebhook,
+  });
+}
+
 vk.updates.startPolling()
   .then(() => {
-    console.log(`VK dating bot started. Admins: ${ADMIN_IDS.join(', ') || 'none'}`);
+    const paymentStatus = payments.isPaymentConfigured()
+      ? `ЮKassa (${paymentConfig.testMode ? 'тест' : 'боевой'}, подписка ${paymentConfig.subscriptionAmountRub} ₽, топ ${paymentConfig.boostAmountRub} ₽)`
+      : 'ЮKassa не настроена';
+    console.log(`Бот запущен. Админы: ${ADMIN_IDS.join(', ') || 'не заданы'}. ${paymentStatus}.`);
   })
   .catch((error) => {
-    console.error('Failed to start VK bot:', error);
+    console.error('Не удалось запустить бота:', error);
     process.exit(1);
   });

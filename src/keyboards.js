@@ -89,11 +89,11 @@ function incomingLike(profileId) {
     .textButton({ label: '👎 Пропустить', payload: payload('reject_like', { profileId }), color: Keyboard.NEGATIVE_COLOR });
 }
 
-function pay() {
+function paymentUrl(label, url) {
   return Keyboard.builder()
-    .textButton({ label: 'Заплатить 600 ₽ 💳', payload: payload('pay_click'), color: Keyboard.POSITIVE_COLOR })
+    .urlButton({ label, url })
     .row()
-    .textButton({ label: 'Назад 🕌', payload: payload('menu'), color: Keyboard.SECONDARY_COLOR });
+    .textButton({ label: 'Меню 🕌', payload: payload('menu'), color: Keyboard.SECONDARY_COLOR });
 }
 
 function filters() {
@@ -279,6 +279,6 @@ module.exports = {
   gender,
   incomingLike,
   mainMenu,
-  pay,
+  paymentUrl,
   payload,
 };

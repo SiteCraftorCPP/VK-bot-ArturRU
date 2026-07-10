@@ -7,6 +7,7 @@ const DB_PATH = path.join(DATA_DIR, 'db.json');
 const defaultData = {
   users: {},
   likes: [],
+  payments: [],
   settings: {
     channelUrl: 'https://vk.com/nikaxbot',
     moderatorUrl: 'https://vk.com/rustambek_u',
@@ -42,6 +43,7 @@ class Store {
     this.data = {
       ...clone(defaultData),
       ...parsed,
+      payments: parsed.payments || [],
       settings: {
         ...clone(defaultData.settings),
         ...(parsed.settings || {}),
@@ -92,6 +94,7 @@ class Store {
         },
         pendingLikeTarget: null,
         subscribedUntil: null,
+        boostedUntil: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -158,6 +161,7 @@ class Store {
       },
       pendingLikeTarget: null,
       subscribedUntil: null,
+      boostedUntil: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -233,6 +237,73 @@ class Store {
     }
 
     return new Date(user.subscribedUntil).getTime() > Date.now();
+  }
+
+  isBoosted(user) {
+    if (!user || !user.boostedUntil) {
+      return false;
+    }
+
+    return new Date(user.boostedUntil).getTime() > Date.now();
+  }
+
+  hasPayment(userId, date, amount) {
+    const key = String(userId);
+    return this.data.payments.some(
+      (payment) => payment.userId === key && payment.date === date && payment.amount === amount,
+    );
+  }
+
+  createPendingPayment(payment) {
+    this.data.payments.push({
+      yookassaPaymentId: payment.yookassaPaymentId,
+      userId: String(payment.userId),
+      product: payment.product,
+      amount: payment.amount,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    });
+    this.save();
+  }
+
+  hasSucceededYookassaPayment(yookassaPaymentId) {
+    return this.data.payments.some(
+      (payment) => payment.yookassaPaymentId === yookassaPaymentId && payment.status === 'succeeded',
+    );
+  }
+
+  completeYookassaPayment(yookassaPaymentId) {
+    const payment = this.data.payments.find((item) => item.yookassaPaymentId === yookassaPaymentId);
+    if (!payment) {
+      this.data.payments.push({
+        yookassaPaymentId,
+        userId: '',
+        product: '',
+        amount: 0,
+        status: 'succeeded',
+        paidAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+      this.save();
+      return null;
+    }
+
+    payment.status = 'succeeded';
+    payment.paidAt = new Date().toISOString();
+    this.save();
+    return payment;
+  }
+
+  recordPayment(payment) {
+    this.data.payments.push({
+      userId: String(payment.userId),
+      amount: payment.amount,
+      description: payment.description || '',
+      date: payment.date,
+      product: payment.product,
+      createdAt: new Date().toISOString(),
+    });
+    this.save();
   }
 
   addLike(fromId, toId, status = 'pending') {

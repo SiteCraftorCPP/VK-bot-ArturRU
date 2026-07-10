@@ -4,33 +4,12 @@ const os = require('node:os');
 
 const { Store } = require('../src/store');
 const keyboards = require('../src/keyboards');
-
-const LOG_PATH = path.join(__dirname, '..', 'debug-a7623c.log');
-const INGEST = 'http://127.0.0.1:7592/ingest/4acb8ae7-3361-4208-8d2c-4ed04750a4c9';
-
-function debugLog(hypothesisId, location, message, data = {}) {
-  const entry = {
-    sessionId: 'a7623c',
-    runId: 'automated-test',
-    hypothesisId,
-    location,
-    message,
-    data,
-    timestamp: Date.now(),
-  };
-  fs.appendFileSync(LOG_PATH, `${JSON.stringify(entry)}\n`);
-  fetch(INGEST, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a7623c' },
-    body: JSON.stringify(entry),
-  }).catch(() => {});
-}
+const payments = require('../src/payments');
 
 function assert(condition, name) {
   if (!condition) {
     throw new Error(`FAIL: ${name}`);
   }
-  debugLog('TEST', 'scripts/test-bot.js', 'assert passed', { name });
 }
 
 function parseAgeFilter(text = '') {
@@ -134,7 +113,6 @@ function runTests() {
 
   const match = findNextProfile(store, male);
   assert(Boolean(match), 'findNextProfile finds opposite gender in same city');
-  debugLog('H3', 'scripts/test-bot.js', 'browse match', { city: match.city, gender: match.gender });
 
   assert(parseAgeFilter('18-35')?.ageFrom === 18, 'parseAgeFilter range');
   assert(parseAgeFilter('25')?.ageFrom === 25, 'parseAgeFilter single');
@@ -148,6 +126,19 @@ function runTests() {
   assert(!femaleMenu.includes('Оплатить бот'), 'female menu hides pay button');
   assert(maleMenu.includes('boost_top'), 'male menu has boost top');
   assert(maleMenu.includes('Оплатить бот'), 'male menu keeps pay button');
+
+  process.env.YOOKASSA_SHOP_ID = '123456';
+  process.env.YOOKASSA_SECRET_KEY = 'test_secret';
+  process.env.SUBSCRIPTION_AMOUNT = '1';
+  process.env.BOOST_AMOUNT = '1';
+  assert(payments.isPaymentConfigured(), 'yookassa config is complete');
+  assert(payments.formatAmount(1) === '1.00', 'format amount');
+  assert(payments.getProductAmount('subscription') === 1, 'subscription amount from env');
+  assert(payments.getProductAmount('boost') === 1, 'boost amount from env');
+
+  const payKb = keyboards.paymentUrl('Оплатить 1 ₽', 'https://yookassa.ru/checkout/test').toString();
+  assert(payKb.includes('"type":"open_link"'), 'payment keyboard has open_link');
+  assert(payKb.includes('yookassa.ru'), 'payment keyboard has payment url');
 
   const adminMenu = keyboards.admin().toString();
   assert(adminMenu.includes('admin_stats'), 'admin menu has stats');
@@ -168,10 +159,8 @@ function runTests() {
 
   const editKb = keyboards.adminEditProfile().toString();
   assert(editKb.includes('admin_edit_field'), 'admin edit profile keyboard');
-  
-  // Test admin functionality
+
   const adminId = '100';
-  // Test adding mock profile via state machine
   store.updateUser(adminId, { state: 'admin_add_age', draft: { adminProfile: { gender: 'female', country: '' } } });
   store.updateDraft(adminId, { adminProfile: { ...store.getUser(adminId).draft.adminProfile, age: 20 } });
   store.updateUser(adminId, { state: 'admin_add_city' });
@@ -204,10 +193,21 @@ function runTests() {
 
   store.deleteUser('100');
   assert(store.getUser('100') === null, 'user deleted');
-  debugLog('H4', 'scripts/test-bot.js', 'admin keyboard visibility', {
-    adminHasButton: adminMenu.includes('admin'),
-    userHasButton: femaleMenu.includes('admin'),
+
+  store.ensureUser('500');
+  store.createPendingPayment({
+    yookassaPaymentId: 'pay_test_1',
+    userId: '500',
+    product: 'subscription',
+    amount: 1,
   });
+  assert(!store.hasSucceededYookassaPayment('pay_test_1'), 'pending payment is not succeeded yet');
+  store.completeYookassaPayment('pay_test_1');
+  assert(store.hasSucceededYookassaPayment('pay_test_1'), 'payment marked as succeeded');
+  store.updateUser('500', { subscribedUntil: payments.extendUntil(null, 30) });
+  assert(store.isSubscribed(store.getUser('500')), 'subscription extension works');
+  store.updateUser('500', { boostedUntil: payments.extendUntil(null, 7) });
+  assert(store.isBoosted(store.getUser('500')), 'boost extension works');
 
   const broken = store.ensureUser('200');
   store.updateUser('200', {
@@ -232,24 +232,14 @@ function runTests() {
   const adminFlow = recoverUserState(store, store.getUser('300'));
   assert(adminFlow.state === 'admin_add_age', 'recover keeps active admin add flow');
   assert(adminFlow.draft.adminProfile?.gender === 'male', 'recover keeps admin draft');
-  debugLog('H2', 'scripts/test-bot.js', 'registration recovery', {
-    beforeState: 'ask_gender',
-    afterState: recovered.state,
-    hasData: isProfileDataComplete(recovered),
-  });
 
   fs.unlinkSync(tmpDb);
-  debugLog('ALL', 'scripts/test-bot.js', 'all automated tests passed', { totalChecks: 8 });
   console.log('All automated tests passed');
 }
 
 try {
-  if (fs.existsSync(LOG_PATH)) {
-    fs.unlinkSync(LOG_PATH);
-  }
   runTests();
 } catch (error) {
-  debugLog('FAIL', 'scripts/test-bot.js', error.message, { stack: error.stack?.split('\n').slice(0, 3) });
   console.error(error.message);
   process.exit(1);
 }

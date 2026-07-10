@@ -82,7 +82,11 @@ async function fixUser(profile, viewerId) {
 }
 
 async function main() {
-  const viewerId = ADMIN_IDS[0] || '782498140';
+  const viewerId = ADMIN_IDS[0];
+  if (!viewerId) {
+    throw new Error('Укажите ADMIN_IDS в файле .env');
+  }
+
   const users = store.listProfiles().filter((u) => u.profileComplete && u.photo);
   for (const user of users) {
     await fixUser(user, viewerId);
