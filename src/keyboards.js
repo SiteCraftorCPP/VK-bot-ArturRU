@@ -131,71 +131,10 @@ function isAgeRangeSelected(filters, ageFrom, ageTo) {
   return filters.ageFrom === ageFrom && filters.ageTo === ageTo;
 }
 
-function filterAll(user) {
-  const keyboard = Keyboard.builder();
-  const defaultRange = getDefaultAgeRange(user);
-  const isDefaultSelected = isAgeRangeSelected(user.filters, defaultRange.ageFrom, defaultRange.ageTo);
-
-  AGE_PRESET_ROWS.forEach((row, rowIndex) => {
-    if (rowIndex > 0) {
-      keyboard.row();
-    }
-    row.forEach((preset) => {
-      const selected = isAgeRangeSelected(user.filters, preset.ageFrom, preset.ageTo);
-      keyboard.textButton({
-        label: labelWithCheck(preset.label, selected),
-        payload: payload('filter_age_set', { preset: preset.id }),
-        color: Keyboard.SECONDARY_COLOR,
-      });
-    });
-  });
-
-  keyboard
+function appendFilterMenu(keyboard) {
+  return keyboard
     .row()
-    .textButton({
-      label: labelWithCheck('По умолчанию +-15', isDefaultSelected),
-      payload: payload('filter_age_default'),
-      color: Keyboard.SECONDARY_COLOR,
-    });
-
-  const myCity = user.city || 'Мой город';
-  const isAllCities = user.filters.city === '*';
-  keyboard
-    .row()
-    .textButton({
-      label: labelWithCheck(myCity, !isAllCities),
-      payload: payload('filter_city_my'),
-      color: Keyboard.SECONDARY_COLOR,
-    })
-    .textButton({
-      label: labelWithCheck('Все города', isAllCities),
-      payload: payload('filter_city_all'),
-      color: Keyboard.SECONDARY_COLOR,
-    });
-
-  const isRu = String(user.filters.country || '').toUpperCase() === 'RU';
-  const isAllCountries = !user.filters.country;
-  keyboard
-    .row()
-    .textButton({
-      label: labelWithCheck('🇷🇺 RU', isRu),
-      payload: payload('filter_country_ru'),
-      color: Keyboard.SECONDARY_COLOR,
-    })
-    .textButton({
-      label: labelWithCheck('Все страны', isAllCountries),
-      payload: payload('filter_country_all'),
-      color: Keyboard.SECONDARY_COLOR,
-    });
-
-  keyboard
-    .row()
-    .textButton({ label: 'Сбросить', payload: payload('filter_reset'), color: Keyboard.NEGATIVE_COLOR })
-    .textButton({ label: 'Меню 🕌', payload: payload('menu'), color: Keyboard.SECONDARY_COLOR })
-    .row()
-    .textButton({ label: 'Смотреть анкеты 💞', payload: payload('browse'), color: Keyboard.PRIMARY_COLOR });
-
-  return keyboard;
+    .textButton({ label: 'Меню 🕌', payload: payload('menu'), color: Keyboard.SECONDARY_COLOR });
 }
 
 function filterAge(user) {
@@ -225,41 +164,45 @@ function filterAge(user) {
       color: Keyboard.SECONDARY_COLOR,
     });
 
-  return keyboard;
+  return appendFilterMenu(keyboard);
 }
 
 function filterCity(user) {
   const myCity = user.city || 'Мой город';
   const isAll = user.filters.city === '*';
 
-  return Keyboard.builder()
-    .textButton({
-      label: labelWithCheck(myCity, !isAll),
-      payload: payload('filter_city_my'),
-      color: Keyboard.SECONDARY_COLOR,
-    })
-    .textButton({
-      label: labelWithCheck('Все города', isAll),
-      payload: payload('filter_city_all'),
-      color: Keyboard.SECONDARY_COLOR,
-    });
+  return appendFilterMenu(
+    Keyboard.builder()
+      .textButton({
+        label: labelWithCheck(myCity, !isAll),
+        payload: payload('filter_city_my'),
+        color: Keyboard.SECONDARY_COLOR,
+      })
+      .textButton({
+        label: labelWithCheck('Все города', isAll),
+        payload: payload('filter_city_all'),
+        color: Keyboard.SECONDARY_COLOR,
+      }),
+  );
 }
 
 function filterCountry(user) {
   const isRu = String(user.filters.country || '').toUpperCase() === 'RU';
   const isAll = !user.filters.country;
 
-  return Keyboard.builder()
-    .textButton({
-      label: labelWithCheck('🇷🇺 RU', isRu),
-      payload: payload('filter_country_ru'),
-      color: Keyboard.SECONDARY_COLOR,
-    })
-    .textButton({
-      label: labelWithCheck('Все страны', isAll),
-      payload: payload('filter_country_all'),
-      color: Keyboard.SECONDARY_COLOR,
-    });
+  return appendFilterMenu(
+    Keyboard.builder()
+      .textButton({
+        label: labelWithCheck('🇷🇺 RU', isRu),
+        payload: payload('filter_country_ru'),
+        color: Keyboard.SECONDARY_COLOR,
+      })
+      .textButton({
+        label: labelWithCheck('Все страны', isAll),
+        payload: payload('filter_country_all'),
+        color: Keyboard.SECONDARY_COLOR,
+      }),
+  );
 }
 
 function filtersActions() {
@@ -447,7 +390,6 @@ module.exports = {
   confirmProfile,
   deleteConfirm,
   editProfile,
-  filterAll,
   filterAge,
   filterCity,
   filterCountry,

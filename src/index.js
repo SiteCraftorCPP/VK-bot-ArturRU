@@ -905,25 +905,55 @@ async function handleLike(context, user, profileId, isBackLike = false) {
   }
 }
 
-async function showFilters(context, user) {
+async function showFilterAgeStep(context, user) {
   await context.send({
-    message: [
-      'Фильтр поиска 🔎',
-      '',
-      'Фильтр по возрасту:',
-      'Фильтр по городу:',
-      'Фильтр по стране:',
-      '',
-      'Нажмите нужный вариант — после выбора вернётесь в меню.',
-    ].join('\n'),
-    keyboard: keyboards.filterAll(user),
+    message: 'Фильтр по возрасту:',
+    keyboard: keyboards.filterAge(user),
   });
 }
 
-async function saveFilterAndReturnToMenu(context, user, filters, message) {
-  store.updateUser(user.id, { filters, state: 'ready' });
+async function showFilterCityStep(context, user) {
   await context.send({
-    message,
+    message: 'Фильтр по городу:',
+    keyboard: keyboards.filterCity(user),
+  });
+}
+
+async function showFilterCountryStep(context, user) {
+  await context.send({
+    message: 'Фильтр по стране:',
+    keyboard: keyboards.filterCountry(user),
+  });
+}
+
+async function showFilters(context, user) {
+  await showFilterAgeStep(context, user);
+}
+
+function formatCityFilterLabel(user) {
+  return user.filters.city === ALL_CITIES ? 'Все города' : (user.city || 'Мой город');
+}
+
+function formatCountryFilterLabel(user) {
+  if (!user.filters.country) {
+    return 'Все страны';
+  }
+  if (String(user.filters.country).toUpperCase() === 'RU') {
+    return '🇷🇺 RU';
+  }
+  return user.filters.country;
+}
+
+async function finishFiltersAndReturnToMenu(context, user) {
+  const current = store.getUser(user.id);
+  store.updateUser(user.id, { state: 'ready' });
+  await context.send({
+    message: [
+      'Фильтры сохранены ✅',
+      `Возраст: ${current.filters.ageFrom}-${current.filters.ageTo}`,
+      `Город: ${formatCityFilterLabel(current)}`,
+      `Страна: ${formatCountryFilterLabel(current)}`,
+    ].join('\n'),
     keyboard: menuKeyboard(context, user.id),
   });
 }
@@ -1694,63 +1724,41 @@ async function handlePayload(context, user, payload) {
       if (!preset) {
         return true;
       }
-      await saveFilterAndReturnToMenu(
-        context,
-        user,
-        { ...user.filters, ageFrom: preset.ageFrom, ageTo: preset.ageTo },
-        `Фильтр сохранён ✅\nВозраст: ${preset.label}`,
-      );
+      store.updateUser(user.id, {
+        filters: { ...user.filters, ageFrom: preset.ageFrom, ageTo: preset.ageTo },
+        state: 'ready',
+      });
+      await showFilterCityStep(context, store.getUser(user.id));
       return true;
     }
     case 'filter_age_default': {
       const range = keyboards.getDefaultAgeRange(user);
-      await saveFilterAndReturnToMenu(
-        context,
-        user,
-        { ...user.filters, ageFrom: range.ageFrom, ageTo: range.ageTo },
-        `Фильтр сохранён ✅\nВозраст: ${range.ageFrom}-${range.ageTo} (+-15)`,
-      );
+      store.updateUser(user.id, {
+        filters: { ...user.filters, ageFrom: range.ageFrom, ageTo: range.ageTo },
+        state: 'ready',
+      });
+      await showFilterCityStep(context, store.getUser(user.id));
       return true;
     }
     case 'filter_city_my':
-      await saveFilterAndReturnToMenu(
-        context,
-        user,
-        { ...user.filters, city: '' },
-        `Фильтр сохранён ✅\nГород: ${user.city || 'Мой город'}`,
-      );
+      store.updateUser(user.id, { filters: { ...user.filters, city: '' }, state: 'ready' });
+      await showFilterCountryStep(context, store.getUser(user.id));
       return true;
     case 'filter_city_all':
-      await saveFilterAndReturnToMenu(
-        context,
-        user,
-        { ...user.filters, city: ALL_CITIES },
-        'Фильтр сохранён ✅\nГород: Все города',
-      );
+      store.updateUser(user.id, { filters: { ...user.filters, city: ALL_CITIES }, state: 'ready' });
+      await showFilterCountryStep(context, store.getUser(user.id));
       return true;
     case 'filter_country_ru':
-      await saveFilterAndReturnToMenu(
-        context,
-        user,
-        { ...user.filters, country: 'RU' },
-        'Фильтр сохранён ✅\nСтрана: 🇷🇺 RU',
-      );
+      store.updateUser(user.id, { filters: { ...user.filters, country: 'RU' }, state: 'ready' });
+      await finishFiltersAndReturnToMenu(context, store.getUser(user.id));
       return true;
     case 'filter_country_all':
-      await saveFilterAndReturnToMenu(
-        context,
-        user,
-        { ...user.filters, country: '' },
-        'Фильтр сохранён ✅\nСтрана: Все страны',
-      );
+      store.updateUser(user.id, { filters: { ...user.filters, country: '' }, state: 'ready' });
+      await finishFiltersAndReturnToMenu(context, store.getUser(user.id));
       return true;
     case 'filter_reset':
-      await saveFilterAndReturnToMenu(
-        context,
-        user,
-        defaultFilters(),
-        'Фильтры сброшены ✅',
-      );
+      store.updateUser(user.id, { filters: defaultFilters(), state: 'ready' });
+      await showFilterAgeStep(context, store.getUser(user.id));
       return true;
     case 'delete_confirm':
       store.updateUser(user.id, { active: false });
