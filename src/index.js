@@ -269,8 +269,14 @@ function parseAgeFilter(text = '') {
   return null;
 }
 
+const ALL_CITIES = '*';
+
 function defaultFilters() {
   return { ageFrom: 18, ageTo: 80, city: '', country: '' };
+}
+
+function isAllCitiesFilter(user) {
+  return user.filters.city === ALL_CITIES;
 }
 
 function isProfileDataComplete(user) {
@@ -932,12 +938,15 @@ async function showFilters(context, user) {
       '',
       'Фильтр по возрасту:',
       `${user.filters.ageFrom}-${user.filters.ageTo}`,
-      'Фильтр по городу:',
-      user.filters.city || user.city || 'ваш город',
       'Фильтр по стране:',
       user.filters.country || 'любая',
     ].join('\n'),
     keyboard: keyboards.filters(),
+  });
+
+  await context.send({
+    message: 'Фильтр по городу:',
+    keyboard: keyboards.filterCity(user),
   });
 }
 
@@ -1708,11 +1717,13 @@ async function handlePayload(context, user, payload) {
         message: 'Фильтр по возрасту (необязательно). По умолчанию: 18-80.\nВведите диапазон, например 18-35 или 25, либо «отмена».',
       });
       return true;
-    case 'filter_city':
-      store.updateUser(user.id, { state: 'filter_city' });
-      await context.send({
-        message: 'Фильтр по городу (необязательно). По умолчанию используется ваш город.\nВведите город или «отмена» / «сброс».',
-      });
+    case 'filter_city_my':
+      store.updateUser(user.id, { filters: { ...user.filters, city: '' }, state: 'ready' });
+      await showFilters(context, store.getUser(user.id));
+      return true;
+    case 'filter_city_all':
+      store.updateUser(user.id, { filters: { ...user.filters, city: ALL_CITIES }, state: 'ready' });
+      await showFilters(context, store.getUser(user.id));
       return true;
     case 'filter_country':
       store.updateUser(user.id, { state: 'filter_country' });
@@ -1952,18 +1963,6 @@ async function handleFilterState(context, user, text) {
     }
 
     store.updateUser(user.id, { filters: { ...user.filters, ageFrom, ageTo }, state: 'ready' });
-    await showFilters(context, store.getUser(user.id));
-    return true;
-  }
-
-  if (user.state === 'filter_city') {
-    if (isFilterCancel(text)) {
-      store.updateUser(user.id, { filters: { ...user.filters, city: '' }, state: 'ready' });
-      await showFilters(context, store.getUser(user.id));
-      return true;
-    }
-
-    store.updateUser(user.id, { filters: { ...user.filters, city: normalizeCity(text) }, state: 'ready' });
     await showFilters(context, store.getUser(user.id));
     return true;
   }

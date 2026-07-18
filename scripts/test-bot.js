@@ -98,6 +98,15 @@ function runTests() {
   const match = findNextProfileFromStore(store, male);
   assert(Boolean(match), 'findNextProfile finds opposite gender in same city');
 
+  const cityKb = keyboards.filterCity(male).toString();
+  assert(cityKb.includes('filter_city_my'), 'city filter has my city button');
+  assert(cityKb.includes('filter_city_all'), 'city filter has all cities button');
+  assert(cityKb.includes('✅'), 'city filter marks selected option');
+
+  store.updateUser(male.id, { filters: { ...male.filters, city: '*' } });
+  const allCitiesMatch = findNextProfileFromStore(store, store.getUser(male.id));
+  assert(Boolean(allCitiesMatch), 'findNextProfile with all cities includes other cities');
+
   store.createMockProfile({
     gender: 'female',
     age: 24,

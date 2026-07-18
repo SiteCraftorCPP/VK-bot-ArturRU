@@ -99,12 +99,21 @@ function paymentUrl(label, url) {
 function filters() {
   return Keyboard.builder()
     .textButton({ label: 'Возраст', payload: payload('filter_age'), color: Keyboard.SECONDARY_COLOR })
-    .textButton({ label: 'Город', payload: payload('filter_city'), color: Keyboard.SECONDARY_COLOR })
-    .row()
     .textButton({ label: 'Страна', payload: payload('filter_country'), color: Keyboard.SECONDARY_COLOR })
-    .textButton({ label: 'Сбросить', payload: payload('filter_reset'), color: Keyboard.NEGATIVE_COLOR })
     .row()
+    .textButton({ label: 'Сбросить', payload: payload('filter_reset'), color: Keyboard.NEGATIVE_COLOR })
     .textButton({ label: 'Смотреть анкеты 💞', payload: payload('browse'), color: Keyboard.PRIMARY_COLOR });
+}
+
+function filterCity(user) {
+  const myCity = user.city || 'Мой город';
+  const isAll = user.filters.city === '*';
+  const myLabel = isAll ? myCity : `${myCity} ✅`;
+  const allLabel = isAll ? 'Все города ✅' : 'Все города';
+
+  return Keyboard.builder()
+    .textButton({ label: myLabel, payload: payload('filter_city_my'), color: Keyboard.SECONDARY_COLOR })
+    .textButton({ label: allLabel, payload: payload('filter_city_all'), color: Keyboard.SECONDARY_COLOR });
 }
 
 function deleteConfirm() {
@@ -274,6 +283,7 @@ module.exports = {
   confirmProfile,
   deleteConfirm,
   editProfile,
+  filterCity,
   filters,
   welcome,
   gender,

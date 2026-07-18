@@ -42,9 +42,11 @@ function findNextProfile(user, profiles, likes, isBoosted) {
     .filter((profile) => profile.gender === wantedGender)
     .filter((profile) => !skippedIds.has(profile.id))
     .filter((profile) => {
-      const cityFilter = user.filters.city || user.city;
-      if (cityFilter && profile.city.toLowerCase() !== cityFilter.toLowerCase()) {
-        return false;
+      if (user.filters.city !== '*') {
+        const cityFilter = user.city;
+        if (cityFilter && profile.city.toLowerCase() !== cityFilter.toLowerCase()) {
+          return false;
+        }
       }
 
       if (user.filters.country && profile.country.toLowerCase() !== user.filters.country.toLowerCase()) {
