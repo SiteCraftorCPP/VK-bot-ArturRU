@@ -250,33 +250,10 @@ function hasContacts(text = '') {
   return /(\+?\d[\d\s().-]{7,}|https?:\/\/|vk\.com|t\.me|@\w+)/i.test(text);
 }
 
-function isFilterCancel(text = '') {
-  return ['отмена', 'cancel', 'назад', 'сброс'].includes(normalizeText(text).toLowerCase());
-}
-
-function parseAgeFilter(text = '') {
-  const value = normalizeText(text);
-  const rangeMatch = value.match(/^(\d{1,2})\s*[-–—]\s*(\d{1,2})$/);
-  if (rangeMatch) {
-    return { ageFrom: Number(rangeMatch[1]), ageTo: Number(rangeMatch[2]) };
-  }
-
-  const single = Number(value);
-  if (Number.isInteger(single)) {
-    return { ageFrom: single, ageTo: single };
-  }
-
-  return null;
-}
-
 const ALL_CITIES = '*';
 
 function defaultFilters() {
   return { ageFrom: 18, ageTo: 80, city: '', country: '' };
-}
-
-function isAllCitiesFilter(user) {
-  return user.filters.city === ALL_CITIES;
 }
 
 function isProfileDataComplete(user) {
@@ -930,23 +907,23 @@ async function handleLike(context, user, profileId, isBackLike = false) {
 
 async function showFilters(context, user) {
   await context.send({
-    message: [
-      'Фильтр поиска 🔎',
-      '',
-      'По умолчанию бот уже ищет анкеты в вашем городе, возраст 18-80.',
-      'Менять фильтры нужно только при желании.',
-      '',
-      'Фильтр по возрасту:',
-      `${user.filters.ageFrom}-${user.filters.ageTo}`,
-      'Фильтр по стране:',
-      user.filters.country || 'любая',
-    ].join('\n'),
-    keyboard: keyboards.filters(),
+    message: 'Фильтр по возрасту:',
+    keyboard: keyboards.filterAge(user),
   });
 
   await context.send({
     message: 'Фильтр по городу:',
     keyboard: keyboards.filterCity(user),
+  });
+
+  await context.send({
+    message: 'Фильтр по стране:',
+    keyboard: keyboards.filterCountry(user),
+  });
+
+  await context.send({
+    message: 'Выберите параметры поиска и нажмите «Смотреть анкеты 💞».',
+    keyboard: keyboards.filtersActions(),
   });
 }
 
@@ -1711,12 +1688,27 @@ async function handlePayload(context, user, payload) {
     case 'moderator':
       await showModerator(context);
       return true;
-    case 'filter_age':
-      store.updateUser(user.id, { state: 'filter_age' });
-      await context.send({
-        message: 'Фильтр по возрасту (необязательно). По умолчанию: 18-80.\nВведите диапазон, например 18-35 или 25, либо «отмена».',
+    case 'filter_age_set': {
+      const preset = keyboards.getAgePresetById(payload.preset);
+      if (!preset) {
+        return true;
+      }
+      store.updateUser(user.id, {
+        filters: { ...user.filters, ageFrom: preset.ageFrom, ageTo: preset.ageTo },
+        state: 'ready',
       });
+      await showFilters(context, store.getUser(user.id));
       return true;
+    }
+    case 'filter_age_default': {
+      const range = keyboards.getDefaultAgeRange(user);
+      store.updateUser(user.id, {
+        filters: { ...user.filters, ageFrom: range.ageFrom, ageTo: range.ageTo },
+        state: 'ready',
+      });
+      await showFilters(context, store.getUser(user.id));
+      return true;
+    }
     case 'filter_city_my':
       store.updateUser(user.id, { filters: { ...user.filters, city: '' }, state: 'ready' });
       await showFilters(context, store.getUser(user.id));
@@ -1725,11 +1717,13 @@ async function handlePayload(context, user, payload) {
       store.updateUser(user.id, { filters: { ...user.filters, city: ALL_CITIES }, state: 'ready' });
       await showFilters(context, store.getUser(user.id));
       return true;
-    case 'filter_country':
-      store.updateUser(user.id, { state: 'filter_country' });
-      await context.send({
-        message: 'Фильтр по стране (необязательно). По умолчанию: любая.\nВведите страну или «отмена» / «сброс».',
-      });
+    case 'filter_country_ru':
+      store.updateUser(user.id, { filters: { ...user.filters, country: 'RU' }, state: 'ready' });
+      await showFilters(context, store.getUser(user.id));
+      return true;
+    case 'filter_country_all':
+      store.updateUser(user.id, { filters: { ...user.filters, country: '' }, state: 'ready' });
+      await showFilters(context, store.getUser(user.id));
       return true;
     case 'filter_reset':
       store.updateUser(user.id, { filters: defaultFilters(), state: 'ready' });
@@ -1941,44 +1935,6 @@ async function handlePayload(context, user, payload) {
 }
 
 async function handleFilterState(context, user, text) {
-  if (user.state === 'filter_age') {
-    if (isFilterCancel(text)) {
-      store.updateUser(user.id, { state: 'ready' });
-      await showFilters(context, store.getUser(user.id));
-      return true;
-    }
-
-    const parsed = parseAgeFilter(text);
-    if (!parsed) {
-      await context.send({
-        message: 'Не понял возраст. Примеры: 18-35, 25. Или напишите «отмена».',
-      });
-      return true;
-    }
-
-    const { ageFrom, ageTo } = parsed;
-    if (ageFrom < 18 || ageTo > 80 || ageFrom > ageTo) {
-      await context.send({ message: 'Возраст должен быть от 18 до 80, и «от» не больше «до».' });
-      return true;
-    }
-
-    store.updateUser(user.id, { filters: { ...user.filters, ageFrom, ageTo }, state: 'ready' });
-    await showFilters(context, store.getUser(user.id));
-    return true;
-  }
-
-  if (user.state === 'filter_country') {
-    if (isFilterCancel(text)) {
-      store.updateUser(user.id, { filters: { ...user.filters, country: '' }, state: 'ready' });
-      await showFilters(context, store.getUser(user.id));
-      return true;
-    }
-
-    store.updateUser(user.id, { filters: { ...user.filters, country: normalizeText(text) }, state: 'ready' });
-    await showFilters(context, store.getUser(user.id));
-    return true;
-  }
-
   return false;
 }
 

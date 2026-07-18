@@ -96,24 +96,119 @@ function paymentUrl(label, url) {
     .textButton({ label: 'Меню 🕌', payload: payload('menu'), color: Keyboard.SECONDARY_COLOR });
 }
 
-function filters() {
-  return Keyboard.builder()
-    .textButton({ label: 'Возраст', payload: payload('filter_age'), color: Keyboard.SECONDARY_COLOR })
-    .textButton({ label: 'Страна', payload: payload('filter_country'), color: Keyboard.SECONDARY_COLOR })
+function labelWithCheck(label, selected) {
+  return selected ? `${label} ✅` : label;
+}
+
+const AGE_PRESET_ROWS = [
+  [
+    { id: '18-25', ageFrom: 18, ageTo: 25, label: '18-25' },
+    { id: '18-33', ageFrom: 18, ageTo: 33, label: '18-33' },
+  ],
+  [
+    { id: '25-35', ageFrom: 25, ageTo: 35, label: '25-35' },
+    { id: '25-39', ageFrom: 25, ageTo: 39, label: '25-39' },
+  ],
+  [
+    { id: '35-45', ageFrom: 35, ageTo: 45, label: '35-45' },
+    { id: '35-49', ageFrom: 35, ageTo: 49, label: '35-49' },
+  ],
+  [
+    { id: '45-55', ageFrom: 45, ageTo: 55, label: '45-55' },
+    { id: '49+', ageFrom: 49, ageTo: 80, label: '>49' },
+  ],
+];
+
+function getDefaultAgeRange(user) {
+  const age = user.age || 25;
+  return {
+    ageFrom: Math.max(18, age - 15),
+    ageTo: Math.min(80, age + 15),
+  };
+}
+
+function isAgeRangeSelected(filters, ageFrom, ageTo) {
+  return filters.ageFrom === ageFrom && filters.ageTo === ageTo;
+}
+
+function filterAge(user) {
+  const keyboard = Keyboard.builder();
+  const defaultRange = getDefaultAgeRange(user);
+  const isDefaultSelected = isAgeRangeSelected(user.filters, defaultRange.ageFrom, defaultRange.ageTo);
+
+  AGE_PRESET_ROWS.forEach((row, rowIndex) => {
+    if (rowIndex > 0) {
+      keyboard.row();
+    }
+    row.forEach((preset) => {
+      const selected = isAgeRangeSelected(user.filters, preset.ageFrom, preset.ageTo);
+      keyboard.textButton({
+        label: labelWithCheck(preset.label, selected),
+        payload: payload('filter_age_set', { preset: preset.id }),
+        color: Keyboard.SECONDARY_COLOR,
+      });
+    });
+  });
+
+  keyboard
     .row()
-    .textButton({ label: 'Сбросить', payload: payload('filter_reset'), color: Keyboard.NEGATIVE_COLOR })
-    .textButton({ label: 'Смотреть анкеты 💞', payload: payload('browse'), color: Keyboard.PRIMARY_COLOR });
+    .textButton({
+      label: labelWithCheck('По умолчанию +-15', isDefaultSelected),
+      payload: payload('filter_age_default'),
+      color: Keyboard.SECONDARY_COLOR,
+    });
+
+  return keyboard;
 }
 
 function filterCity(user) {
   const myCity = user.city || 'Мой город';
   const isAll = user.filters.city === '*';
-  const myLabel = isAll ? myCity : `${myCity} ✅`;
-  const allLabel = isAll ? 'Все города ✅' : 'Все города';
 
   return Keyboard.builder()
-    .textButton({ label: myLabel, payload: payload('filter_city_my'), color: Keyboard.SECONDARY_COLOR })
-    .textButton({ label: allLabel, payload: payload('filter_city_all'), color: Keyboard.SECONDARY_COLOR });
+    .textButton({
+      label: labelWithCheck(myCity, !isAll),
+      payload: payload('filter_city_my'),
+      color: Keyboard.SECONDARY_COLOR,
+    })
+    .textButton({
+      label: labelWithCheck('Все города', isAll),
+      payload: payload('filter_city_all'),
+      color: Keyboard.SECONDARY_COLOR,
+    });
+}
+
+function filterCountry(user) {
+  const isRu = String(user.filters.country || '').toUpperCase() === 'RU';
+  const isAll = !user.filters.country;
+
+  return Keyboard.builder()
+    .textButton({
+      label: labelWithCheck('🇷🇺 RU', isRu),
+      payload: payload('filter_country_ru'),
+      color: Keyboard.SECONDARY_COLOR,
+    })
+    .textButton({
+      label: labelWithCheck('Все страны', isAll),
+      payload: payload('filter_country_all'),
+      color: Keyboard.SECONDARY_COLOR,
+    });
+}
+
+function filtersActions() {
+  return Keyboard.builder()
+    .textButton({ label: 'Сбросить', payload: payload('filter_reset'), color: Keyboard.NEGATIVE_COLOR })
+    .textButton({ label: 'Смотреть анкеты 💞', payload: payload('browse'), color: Keyboard.PRIMARY_COLOR });
+}
+
+function getAgePresetById(id) {
+  for (const row of AGE_PRESET_ROWS) {
+    const preset = row.find((item) => item.id === id);
+    if (preset) {
+      return preset;
+    }
+  }
+  return null;
 }
 
 function deleteConfirm() {
@@ -283,8 +378,12 @@ module.exports = {
   confirmProfile,
   deleteConfirm,
   editProfile,
+  filterAge,
   filterCity,
-  filters,
+  filterCountry,
+  filtersActions,
+  getAgePresetById,
+  getDefaultAgeRange,
   welcome,
   gender,
   incomingLike,

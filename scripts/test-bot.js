@@ -103,6 +103,19 @@ function runTests() {
   assert(cityKb.includes('filter_city_all'), 'city filter has all cities button');
   assert(cityKb.includes('✅'), 'city filter marks selected option');
 
+  const ageKb = keyboards.filterAge(male).toString();
+  assert(ageKb.includes('filter_age_set'), 'age filter has preset buttons');
+  assert(ageKb.includes('filter_age_default'), 'age filter has default +-15 button');
+
+  store.updateUser(male.id, { filters: { ...male.filters, ageFrom: 18, ageTo: 33 } });
+  const ageKbSelected = keyboards.filterAge(store.getUser(male.id)).toString();
+  assert(ageKbSelected.includes('18-33 ✅'), 'age filter marks selected preset');
+
+  const countryKb = keyboards.filterCountry(male).toString();
+  assert(countryKb.includes('filter_country_ru'), 'country filter has RU button');
+  assert(countryKb.includes('filter_country_all'), 'country filter has all countries button');
+  assert(countryKb.includes('Все страны ✅'), 'country filter marks all countries by default');
+
   store.updateUser(male.id, { filters: { ...male.filters, city: '*' } });
   const allCitiesMatch = findNextProfileFromStore(store, store.getUser(male.id));
   assert(Boolean(allCitiesMatch), 'findNextProfile with all cities includes other cities');
