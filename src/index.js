@@ -907,23 +907,24 @@ async function handleLike(context, user, profileId, isBackLike = false) {
 
 async function showFilters(context, user) {
   await context.send({
-    message: 'Фильтр по возрасту:',
-    keyboard: keyboards.filterAge(user),
+    message: [
+      'Фильтр поиска 🔎',
+      '',
+      'Фильтр по возрасту:',
+      'Фильтр по городу:',
+      'Фильтр по стране:',
+      '',
+      'Нажмите нужный вариант — после выбора вернётесь в меню.',
+    ].join('\n'),
+    keyboard: keyboards.filterAll(user),
   });
+}
 
+async function saveFilterAndReturnToMenu(context, user, filters, message) {
+  store.updateUser(user.id, { filters, state: 'ready' });
   await context.send({
-    message: 'Фильтр по городу:',
-    keyboard: keyboards.filterCity(user),
-  });
-
-  await context.send({
-    message: 'Фильтр по стране:',
-    keyboard: keyboards.filterCountry(user),
-  });
-
-  await context.send({
-    message: 'Выберите параметры поиска и нажмите «Смотреть анкеты 💞».',
-    keyboard: keyboards.filtersActions(),
+    message,
+    keyboard: menuKeyboard(context, user.id),
   });
 }
 
@@ -1693,41 +1694,63 @@ async function handlePayload(context, user, payload) {
       if (!preset) {
         return true;
       }
-      store.updateUser(user.id, {
-        filters: { ...user.filters, ageFrom: preset.ageFrom, ageTo: preset.ageTo },
-        state: 'ready',
-      });
-      await showFilters(context, store.getUser(user.id));
+      await saveFilterAndReturnToMenu(
+        context,
+        user,
+        { ...user.filters, ageFrom: preset.ageFrom, ageTo: preset.ageTo },
+        `Фильтр сохранён ✅\nВозраст: ${preset.label}`,
+      );
       return true;
     }
     case 'filter_age_default': {
       const range = keyboards.getDefaultAgeRange(user);
-      store.updateUser(user.id, {
-        filters: { ...user.filters, ageFrom: range.ageFrom, ageTo: range.ageTo },
-        state: 'ready',
-      });
-      await showFilters(context, store.getUser(user.id));
+      await saveFilterAndReturnToMenu(
+        context,
+        user,
+        { ...user.filters, ageFrom: range.ageFrom, ageTo: range.ageTo },
+        `Фильтр сохранён ✅\nВозраст: ${range.ageFrom}-${range.ageTo} (+-15)`,
+      );
       return true;
     }
     case 'filter_city_my':
-      store.updateUser(user.id, { filters: { ...user.filters, city: '' }, state: 'ready' });
-      await showFilters(context, store.getUser(user.id));
+      await saveFilterAndReturnToMenu(
+        context,
+        user,
+        { ...user.filters, city: '' },
+        `Фильтр сохранён ✅\nГород: ${user.city || 'Мой город'}`,
+      );
       return true;
     case 'filter_city_all':
-      store.updateUser(user.id, { filters: { ...user.filters, city: ALL_CITIES }, state: 'ready' });
-      await showFilters(context, store.getUser(user.id));
+      await saveFilterAndReturnToMenu(
+        context,
+        user,
+        { ...user.filters, city: ALL_CITIES },
+        'Фильтр сохранён ✅\nГород: Все города',
+      );
       return true;
     case 'filter_country_ru':
-      store.updateUser(user.id, { filters: { ...user.filters, country: 'RU' }, state: 'ready' });
-      await showFilters(context, store.getUser(user.id));
+      await saveFilterAndReturnToMenu(
+        context,
+        user,
+        { ...user.filters, country: 'RU' },
+        'Фильтр сохранён ✅\nСтрана: 🇷🇺 RU',
+      );
       return true;
     case 'filter_country_all':
-      store.updateUser(user.id, { filters: { ...user.filters, country: '' }, state: 'ready' });
-      await showFilters(context, store.getUser(user.id));
+      await saveFilterAndReturnToMenu(
+        context,
+        user,
+        { ...user.filters, country: '' },
+        'Фильтр сохранён ✅\nСтрана: Все страны',
+      );
       return true;
     case 'filter_reset':
-      store.updateUser(user.id, { filters: defaultFilters(), state: 'ready' });
-      await showFilters(context, store.getUser(user.id));
+      await saveFilterAndReturnToMenu(
+        context,
+        user,
+        defaultFilters(),
+        'Фильтры сброшены ✅',
+      );
       return true;
     case 'delete_confirm':
       store.updateUser(user.id, { active: false });

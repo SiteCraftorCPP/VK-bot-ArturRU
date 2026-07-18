@@ -103,6 +103,12 @@ function runTests() {
   assert(cityKb.includes('filter_city_all'), 'city filter has all cities button');
   assert(cityKb.includes('✅'), 'city filter marks selected option');
 
+  const allFiltersKb = keyboards.filterAll(male).toString();
+  assert(allFiltersKb.includes('filter_age_set'), 'combined filter has age buttons');
+  assert(allFiltersKb.includes('filter_city_my'), 'combined filter has city buttons');
+  assert(allFiltersKb.includes('filter_country_ru'), 'combined filter has country buttons');
+  assert(allFiltersKb.includes('"action":"menu"'), 'combined filter has menu button');
+
   const ageKb = keyboards.filterAge(male).toString();
   assert(ageKb.includes('filter_age_set'), 'age filter has preset buttons');
   assert(ageKb.includes('filter_age_default'), 'age filter has default +-15 button');
