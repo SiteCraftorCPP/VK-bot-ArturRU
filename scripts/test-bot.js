@@ -121,6 +121,13 @@ function runTests() {
   const allCitiesMatch = findNextProfileFromStore(store, store.getUser(male.id));
   assert(Boolean(allCitiesMatch), 'findNextProfile with all cities includes other cities');
 
+  store.rejectProfile(male.id, allCitiesMatch.id);
+  const afterSkip = findNextProfileFromStore(store, store.getUser(male.id));
+  assert(Boolean(afterSkip), 'findNextProfile loops feed after skip');
+
+  const browseKb = keyboards.browse('123').toString();
+  assert(browseKb.includes('⏩ Далее'), 'browse keyboard uses next button label');
+
   store.createMockProfile({
     gender: 'female',
     age: 24,

@@ -336,6 +336,22 @@ class Store {
     return this.addLike(fromId, toId, 'rejected');
   }
 
+  removeLike(fromId, toId) {
+    const fromKey = String(fromId);
+    const toKey = String(toId);
+    const before = this.data.likes.length;
+    this.data.likes = this.data.likes.filter(
+      (like) => !(like.fromId === fromKey && like.toId === toKey),
+    );
+    if (this.data.likes.length !== before) {
+      this.save();
+    }
+  }
+
+  isProfileVisibleInFeed(profile) {
+    return Boolean(profile?.profileComplete && profile.active);
+  }
+
   getLike(fromId, toId) {
     return this.data.likes.find(
       (like) => like.fromId === String(fromId) && like.toId === String(toId),

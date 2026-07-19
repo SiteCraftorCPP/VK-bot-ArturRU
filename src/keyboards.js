@@ -78,7 +78,7 @@ function editProfile() {
 function browse(profileId) {
   return Keyboard.builder()
     .textButton({ label: '❤️', payload: payload('like', { profileId }), color: Keyboard.POSITIVE_COLOR })
-    .textButton({ label: '👎', payload: payload('skip', { profileId }), color: Keyboard.NEGATIVE_COLOR })
+    .textButton({ label: '⏩ Далее', payload: payload('skip', { profileId }), color: Keyboard.SECONDARY_COLOR })
     .row()
     .textButton({ label: 'Меню 🕌', payload: payload('menu'), color: Keyboard.SECONDARY_COLOR });
 }

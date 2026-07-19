@@ -875,8 +875,12 @@ async function fulfillPendingLike(userId) {
 
 async function handleLike(context, user, profileId, isBackLike = false) {
   const target = store.getUser(profileId);
-  if (!target || !target.profileComplete || !target.active) {
-    await context.send({ message: 'Эта анкета уже недоступна.' });
+  if (!store.isProfileVisibleInFeed(target)) {
+    store.removeLike(profileId, user.id);
+    await sendPartnerUnavailableMessage(context, user.id);
+    if (!isBackLike) {
+      await browseProfiles(context, user);
+    }
     return;
   }
 
@@ -888,7 +892,10 @@ async function handleLike(context, user, profileId, isBackLike = false) {
 
   const result = await executeLike(user, profileId);
   if (!result.ok) {
-    await context.send({ message: 'Эта анкета уже недоступна.' });
+    await sendPartnerUnavailableMessage(context, user.id);
+    if (!isBackLike) {
+      await browseProfiles(context, user);
+    }
     return;
   }
 
@@ -958,6 +965,17 @@ async function finishFiltersAndReturnToMenu(context, user) {
   });
 }
 
+async function sendPartnerUnavailableMessage(context, userId) {
+  await context.send({
+    message: [
+      'К сожалению пользователь уже нашёл свою половину!',
+      'Пожалуйста продолжайте просмотр анкет 💞',
+      'ИншАллах вы тоже найдёте свою половину у нас.',
+    ].join('\n'),
+    keyboard: menuKeyboard(context, userId),
+  });
+}
+
 async function showIncomingLikes(context, user) {
   const likes = store.getIncomingLikes(user.id);
   if (!likes.length) {
@@ -965,13 +983,17 @@ async function showIncomingLikes(context, user) {
     return;
   }
 
-  const fromUser = store.getUser(likes[0].fromId);
-  if (!fromUser) {
-    await context.send({ message: 'Лайк больше недоступен.' });
-    return;
+  for (const like of likes) {
+    const fromUser = store.getUser(like.fromId);
+    if (store.isProfileVisibleInFeed(fromUser)) {
+      await sendProfile(context, 'Вам поставили лайк ❤️', fromUser, keyboards.incomingLike(fromUser.id));
+      return;
+    }
+
+    store.removeLike(like.fromId, like.toId);
   }
 
-  await sendProfile(context, 'Вам поставили лайк ❤️', fromUser, keyboards.incomingLike(fromUser.id));
+  await sendPartnerUnavailableMessage(context, user.id);
 }
 
 async function showPay(context) {
@@ -1705,7 +1727,7 @@ async function handlePayload(context, user, payload) {
       return true;
     case 'reject_like':
       store.rejectProfile(user.id, payload.profileId);
-      await context.send({ message: 'Анкета пропущена.', keyboard: menuKeyboard(context, user.id) });
+      await browseProfiles(context, store.getUser(user.id));
       return true;
     case 'pay':
       await showPay(context);

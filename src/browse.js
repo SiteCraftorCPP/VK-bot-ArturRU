@@ -28,19 +28,23 @@ function rankProfilesForBrowse(profiles, isBoosted) {
   });
 }
 
-function findNextProfile(user, profiles, likes, isBoosted) {
-  const wantedGender = user.gender === 'male' ? 'female' : 'male';
-  const skippedIds = new Set(
+function getBrowseExcludedIds(userId, likes, statuses) {
+  return new Set(
     likes
-      .filter((like) => like.fromId === String(user.id))
+      .filter((like) => like.fromId === String(userId))
+      .filter((like) => statuses.includes(like.status))
       .map((like) => like.toId),
   );
+}
+
+function listBrowseCandidates(user, profiles, likes, isBoosted, excludedIds) {
+  const wantedGender = user.gender === 'male' ? 'female' : 'male';
 
   const matched = profiles
     .filter((profile) => profile.id !== String(user.id))
     .filter((profile) => profile.profileComplete && profile.active)
     .filter((profile) => profile.gender === wantedGender)
-    .filter((profile) => !skippedIds.has(profile.id))
+    .filter((profile) => !excludedIds.has(profile.id))
     .filter((profile) => {
       if (user.filters.city !== '*') {
         const cityFilter = user.city;
@@ -49,14 +53,36 @@ function findNextProfile(user, profiles, likes, isBoosted) {
         }
       }
 
-      if (user.filters.country && profile.country.toLowerCase() !== user.filters.country.toLowerCase()) {
+      if (user.filters.country && (profile.country || '').toLowerCase() !== user.filters.country.toLowerCase()) {
         return false;
       }
 
       return profile.age >= user.filters.ageFrom && profile.age <= user.filters.ageTo;
     });
 
-  return rankProfilesForBrowse(matched, isBoosted)[0] || null;
+  return rankProfilesForBrowse(matched, isBoosted);
+}
+
+function findNextProfile(user, profiles, likes, isBoosted) {
+  const freshPass = listBrowseCandidates(
+    user,
+    profiles,
+    likes,
+    isBoosted,
+    getBrowseExcludedIds(user.id, likes, ['pending', 'rejected', 'matched']),
+  );
+  if (freshPass[0]) {
+    return freshPass[0];
+  }
+
+  const loopPass = listBrowseCandidates(
+    user,
+    profiles,
+    likes,
+    isBoosted,
+    getBrowseExcludedIds(user.id, likes, ['matched']),
+  );
+  return loopPass[0] || null;
 }
 
 module.exports = {
