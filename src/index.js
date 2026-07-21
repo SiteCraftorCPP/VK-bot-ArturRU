@@ -7,7 +7,7 @@ const { Store } = require('./store');
 const keyboards = require('./keyboards');
 const payments = require('./payments');
 const yookassa = require('./yookassa');
-const { findNextProfile: pickNextProfile } = require('./browse');
+const { findNextProfile: pickNextProfile, getBrowseEmptyMessage } = require('./browse');
 const { startWebhookServer } = require('./webhook-server');
 
 const LOCK_PATH = path.join(__dirname, '..', 'data', 'bot.lock');
@@ -809,7 +809,7 @@ async function browseProfiles(context, user) {
   const profile = findNextProfile(freshUser);
   if (!profile) {
     await context.send({
-      message: 'Пока нет подходящих анкет в вашем городе 🌙 Когда появятся новые — бот покажет их здесь.',
+      message: getBrowseEmptyMessage(freshUser, store.listProfiles()),
       keyboard: menuKeyboard(context, user.id),
     });
     return;

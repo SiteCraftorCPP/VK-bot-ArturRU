@@ -25,17 +25,30 @@ function isAllCities(filters) {
   return normalizeFilters(filters).city === ALL_CITIES;
 }
 
+function normalizeCityValue(city = '') {
+  const value = String(city || '').trim();
+  if (!value) {
+    return '';
+  }
+
+  const firstPart = value.split(',')[0].trim();
+  return firstPart
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/\s+/g, ' ');
+}
+
 function matchesCityFilter(user, profile) {
   if (isAllCities(user.filters)) {
     return true;
   }
 
-  const myCity = (user.city || '').trim();
+  const myCity = normalizeCityValue(user.city);
   if (!myCity) {
     return true;
   }
 
-  return (profile.city || '').trim().toLowerCase() === myCity.toLowerCase();
+  return normalizeCityValue(profile.city) === myCity;
 }
 
 function matchesCountryFilter(profile, countryFilter) {
@@ -74,4 +87,5 @@ module.exports = {
   matchesCityFilter,
   matchesCountryFilter,
   normalizeFilters,
+  normalizeCityValue,
 };

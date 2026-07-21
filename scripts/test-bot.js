@@ -130,6 +130,10 @@ function runTests() {
   const myCityOnly = findNextProfileFromStore(store, store.getUser(male.id));
   assert(myCityOnly?.city === 'Москва', 'my city filter limits browse to user city');
 
+  store.updateUser(male.id, { filters: { ageFrom: 25, ageTo: 35, city: '*', country: '' } });
+  const narrowAge = findNextProfileFromStore(store, store.getUser(male.id));
+  assert(Boolean(narrowAge), 'browse relaxes age filter when strict range has no matches');
+
   store.updateUser(male.id, { filters: { ageFrom: 18, ageTo: 80, city: '*', country: '' } });
   const allCitiesProfiles = store
     .listProfiles()

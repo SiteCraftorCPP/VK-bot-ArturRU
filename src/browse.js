@@ -1,4 +1,6 @@
 const {
+  ALL_CITIES,
+  isAllCities,
   matchesAgeFilter,
   matchesCityFilter,
   matchesCountryFilter,
@@ -44,6 +46,16 @@ function getBrowseExcludedIds(userId, likes, statuses) {
   );
 }
 
+function withBrowseFilters(user, filtersPatch = {}) {
+  return {
+    ...user,
+    filters: normalizeFilters({
+      ...normalizeFilters(user.filters),
+      ...filtersPatch,
+    }),
+  };
+}
+
 function listBrowseCandidates(user, profiles, likes, isBoosted, excludedIds) {
   const wantedGender = user.gender === 'male' ? 'female' : 'male';
   const filters = normalizeFilters(user.filters);
@@ -61,32 +73,74 @@ function listBrowseCandidates(user, profiles, likes, isBoosted, excludedIds) {
   return rankProfilesForBrowse(matched, isBoosted);
 }
 
-function findNextProfile(user, profiles, likes, isBoosted) {
-  const normalizedUser = { ...user, filters: normalizeFilters(user.filters) };
+function pickFromPasses(user, profiles, likes, isBoosted, passes) {
+  for (const pass of passes) {
+    const excludedIds = getBrowseExcludedIds(user.id, likes, pass.excludeStatuses);
+    const browseUser = pass.filtersPatch ? withBrowseFilters(user, pass.filtersPatch) : withBrowseFilters(user);
+    const candidates = listBrowseCandidates(
+      browseUser,
+      profiles,
+      likes,
+      isBoosted,
+      excludedIds,
+    );
+    if (candidates[0]) {
+      return candidates[0];
+    }
+  }
+  return null;
+}
 
-  const freshPass = listBrowseCandidates(
-    normalizedUser,
-    profiles,
-    likes,
-    isBoosted,
-    getBrowseExcludedIds(user.id, likes, ['pending', 'rejected', 'matched']),
+function findNextProfile(user, profiles, likes, isBoosted) {
+  const normalizedUser = withBrowseFilters(user);
+
+  return pickFromPasses(normalizedUser, profiles, likes, isBoosted, [
+    { excludeStatuses: ['pending', 'rejected', 'matched'] },
+    { excludeStatuses: ['matched'] },
+    { excludeStatuses: ['matched'], filtersPatch: { ageFrom: 18, ageTo: 80 } },
+    { excludeStatuses: ['matched'], filtersPatch: { ageFrom: 18, ageTo: 80, city: ALL_CITIES } },
+  ]);
+}
+
+function getOppositeGenderProfiles(user, profiles) {
+  const wantedGender = user.gender === 'male' ? 'female' : 'male';
+  return profiles.filter(
+    (profile) => profile.id !== String(user.id)
+      && profile.profileComplete
+      && profile.active
+      && profile.gender === wantedGender,
   );
-  if (freshPass[0]) {
-    return freshPass[0];
+}
+
+function getBrowseEmptyMessage(user, profiles) {
+  const filters = normalizeFilters(user.filters);
+  const pool = getOppositeGenderProfiles(user, profiles);
+
+  if (!pool.length) {
+    return 'Пока нет анкет для знакомств 🌙 Когда появятся новые — бот покажет их здесь.';
   }
 
-  const loopPass = listBrowseCandidates(
-    normalizedUser,
-    profiles,
-    likes,
-    isBoosted,
-    getBrowseExcludedIds(user.id, likes, ['matched']),
-  );
-  return loopPass[0] || null;
+  const lines = ['Сейчас нет анкет по вашим фильтрам 🌙'];
+
+  if (!isAllCities(filters)) {
+    lines.push(`Город: ${user.city || 'ваш город'}. Попробуйте «Все города» в фильтрах.`);
+  }
+
+  if (filters.ageFrom !== 18 || filters.ageTo !== 80) {
+    lines.push(`Возраст: ${filters.ageFrom}-${filters.ageTo}. Расширьте диапазон в «Фильтр поиска 🔎».`);
+  }
+
+  if (filters.country) {
+    lines.push(`Страна: ${filters.country}. Попробуйте «Все страны» в фильтрах.`);
+  }
+
+  lines.push('Или нажмите «Смотреть анкеты 💞» позже — лента обновляется.');
+  return lines.join('\n');
 }
 
 module.exports = {
   compareBoostedProfiles,
   findNextProfile,
+  getBrowseEmptyMessage,
   rankProfilesForBrowse,
 };
