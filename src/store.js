@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { normalizeFilters } = require('./filters');
+const { normalizeFilters, defaultFilters } = require('./filters');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
@@ -92,12 +92,7 @@ class Store {
         profileComplete: false,
         state: 'new',
         draft: {},
-        filters: {
-          ageFrom: 18,
-          ageTo: 80,
-          city: '',
-          country: '',
-        },
+        filters: defaultFilters(),
         pendingLikeTarget: null,
         subscribedUntil: null,
         boostedUntil: null,
@@ -160,12 +155,7 @@ class Store {
       profileComplete: true,
       state: 'ready',
       draft: {},
-      filters: {
-        ageFrom: 18,
-        ageTo: 80,
-        city: '',
-        country: '',
-      },
+      filters: defaultFilters(),
       pendingLikeTarget: null,
       subscribedUntil: null,
       boostedUntil: null,

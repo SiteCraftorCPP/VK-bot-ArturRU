@@ -106,6 +106,7 @@ function runTests() {
   const ageKb = keyboards.filterAge(male).toString();
   assert(ageKb.includes('filter_age_set'), 'age filter has preset buttons');
   assert(ageKb.includes('filter_age_default'), 'age filter has default +-15 button');
+  assert(ageKb.includes('18-25 ✅'), 'default age filter marks 18-25');
   assert(ageKb.includes('Меню 🕌'), 'age filter has menu button');
 
   store.updateUser(male.id, { filters: { ...male.filters, ageFrom: 18, ageTo: 33 } });

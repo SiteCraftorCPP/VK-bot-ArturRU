@@ -1,7 +1,8 @@
 const ALL_CITIES = '*';
+const BROWSE_RELAXED_AGE = { ageFrom: 18, ageTo: 80 };
 
 function defaultFilters() {
-  return { ageFrom: 18, ageTo: 80, city: '', country: '' };
+  return { ageFrom: 18, ageTo: 25, city: '', country: '' };
 }
 
 function normalizeFilters(filters) {
@@ -81,6 +82,7 @@ function matchesAgeFilter(profile, filters) {
 
 module.exports = {
   ALL_CITIES,
+  BROWSE_RELAXED_AGE,
   defaultFilters,
   isAllCities,
   matchesAgeFilter,

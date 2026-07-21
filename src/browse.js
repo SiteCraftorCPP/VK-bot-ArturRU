@@ -1,10 +1,12 @@
 const {
   ALL_CITIES,
+  BROWSE_RELAXED_AGE,
   isAllCities,
   matchesAgeFilter,
   matchesCityFilter,
   matchesCountryFilter,
   normalizeFilters,
+  defaultFilters,
 } = require('./filters');
 
 function compareBoostedProfiles(a, b) {
@@ -98,8 +100,8 @@ function findNextProfile(user, profiles, likes, isBoosted) {
 
   return pickFromPasses(normalizedUser, profiles, likes, isBoosted, [
     { excludeStatuses: BROWSE_SKIP_STATUSES },
-    { excludeStatuses: BROWSE_SKIP_STATUSES, filtersPatch: { ageFrom: 18, ageTo: 80 } },
-    { excludeStatuses: BROWSE_SKIP_STATUSES, filtersPatch: { ageFrom: 18, ageTo: 80, city: ALL_CITIES } },
+    { excludeStatuses: BROWSE_SKIP_STATUSES, filtersPatch: BROWSE_RELAXED_AGE },
+    { excludeStatuses: BROWSE_SKIP_STATUSES, filtersPatch: { ...BROWSE_RELAXED_AGE, city: ALL_CITIES } },
   ]);
 }
 
@@ -127,7 +129,8 @@ function getBrowseEmptyMessage(user, profiles) {
     lines.push(`Город: ${user.city || 'ваш город'}. Попробуйте «Все города» в фильтрах.`);
   }
 
-  if (filters.ageFrom !== 18 || filters.ageTo !== 80) {
+  const defaults = defaultFilters();
+  if (filters.ageFrom !== defaults.ageFrom || filters.ageTo !== defaults.ageTo) {
     lines.push(`Возраст: ${filters.ageFrom}-${filters.ageTo}. Расширьте диапазон в «Фильтр поиска 🔎».`);
   }
 
