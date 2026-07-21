@@ -358,6 +358,24 @@ class Store {
     return Boolean(profile?.profileComplete && profile.active);
   }
 
+  hasBrowseProgress(fromId) {
+    const key = String(fromId);
+    return this.data.likes.some(
+      (like) => like.fromId === key && ['rejected', 'pending'].includes(like.status),
+    );
+  }
+
+  clearBrowseProgress(fromId) {
+    const key = String(fromId);
+    const before = this.data.likes.length;
+    this.data.likes = this.data.likes.filter(
+      (like) => !(like.fromId === key && ['rejected', 'pending'].includes(like.status)),
+    );
+    if (this.data.likes.length !== before) {
+      this.save();
+    }
+  }
+
   getLike(fromId, toId) {
     return this.data.likes.find(
       (like) => like.fromId === String(fromId) && like.toId === String(toId),

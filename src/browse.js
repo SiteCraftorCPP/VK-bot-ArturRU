@@ -91,14 +91,15 @@ function pickFromPasses(user, profiles, likes, isBoosted, passes) {
   return null;
 }
 
+const BROWSE_SKIP_STATUSES = ['pending', 'rejected', 'matched'];
+
 function findNextProfile(user, profiles, likes, isBoosted) {
   const normalizedUser = withBrowseFilters(user);
 
   return pickFromPasses(normalizedUser, profiles, likes, isBoosted, [
-    { excludeStatuses: ['pending', 'rejected', 'matched'] },
-    { excludeStatuses: ['matched'] },
-    { excludeStatuses: ['matched'], filtersPatch: { ageFrom: 18, ageTo: 80 } },
-    { excludeStatuses: ['matched'], filtersPatch: { ageFrom: 18, ageTo: 80, city: ALL_CITIES } },
+    { excludeStatuses: BROWSE_SKIP_STATUSES },
+    { excludeStatuses: BROWSE_SKIP_STATUSES, filtersPatch: { ageFrom: 18, ageTo: 80 } },
+    { excludeStatuses: BROWSE_SKIP_STATUSES, filtersPatch: { ageFrom: 18, ageTo: 80, city: ALL_CITIES } },
   ]);
 }
 

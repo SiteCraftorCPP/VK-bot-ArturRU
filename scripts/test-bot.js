@@ -145,7 +145,8 @@ function runTests() {
 
   store.rejectProfile(male.id, allCitiesMatch.id);
   const afterSkip = findNextProfileFromStore(store, store.getUser(male.id));
-  assert(Boolean(afterSkip), 'findNextProfile loops feed after skip');
+  assert(Boolean(afterSkip), 'findNextProfile shows next profile after skip');
+  assert(afterSkip.id !== allCitiesMatch.id, 'findNextProfile does not repeat skipped profile immediately');
 
   const browseKb = keyboards.browse('123').toString();
   assert(browseKb.includes('⏩ Далее'), 'browse keyboard uses next button label');

@@ -806,7 +806,11 @@ async function browseProfiles(context, user) {
   }
 
   const freshUser = store.getUser(user.id) || user;
-  const profile = findNextProfile(freshUser);
+  let profile = findNextProfile(freshUser);
+  if (!profile && store.hasBrowseProgress(freshUser.id)) {
+    store.clearBrowseProgress(freshUser.id);
+    profile = findNextProfile(store.getUser(user.id));
+  }
   if (!profile) {
     await context.send({
       message: getBrowseEmptyMessage(freshUser, store.listProfiles()),
