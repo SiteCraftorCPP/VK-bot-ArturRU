@@ -1,3 +1,10 @@
+const {
+  matchesAgeFilter,
+  matchesCityFilter,
+  matchesCountryFilter,
+  normalizeFilters,
+} = require('./filters');
+
 function compareBoostedProfiles(a, b) {
   const aBoostedAt = new Date(a.boostedAt || 0).getTime();
   const bBoostedAt = new Date(b.boostedAt || 0).getTime();
@@ -39,33 +46,26 @@ function getBrowseExcludedIds(userId, likes, statuses) {
 
 function listBrowseCandidates(user, profiles, likes, isBoosted, excludedIds) {
   const wantedGender = user.gender === 'male' ? 'female' : 'male';
+  const filters = normalizeFilters(user.filters);
+  const browseUser = { ...user, filters };
 
   const matched = profiles
     .filter((profile) => profile.id !== String(user.id))
     .filter((profile) => profile.profileComplete && profile.active)
     .filter((profile) => profile.gender === wantedGender)
     .filter((profile) => !excludedIds.has(profile.id))
-    .filter((profile) => {
-      if (user.filters.city !== '*') {
-        const cityFilter = user.city;
-        if (cityFilter && profile.city.toLowerCase() !== cityFilter.toLowerCase()) {
-          return false;
-        }
-      }
-
-      if (user.filters.country && (profile.country || '').toLowerCase() !== user.filters.country.toLowerCase()) {
-        return false;
-      }
-
-      return profile.age >= user.filters.ageFrom && profile.age <= user.filters.ageTo;
-    });
+    .filter((profile) => matchesCityFilter(browseUser, profile))
+    .filter((profile) => matchesCountryFilter(profile, filters.country))
+    .filter((profile) => matchesAgeFilter(profile, filters));
 
   return rankProfilesForBrowse(matched, isBoosted);
 }
 
 function findNextProfile(user, profiles, likes, isBoosted) {
+  const normalizedUser = { ...user, filters: normalizeFilters(user.filters) };
+
   const freshPass = listBrowseCandidates(
-    user,
+    normalizedUser,
     profiles,
     likes,
     isBoosted,
@@ -76,7 +76,7 @@ function findNextProfile(user, profiles, likes, isBoosted) {
   }
 
   const loopPass = listBrowseCandidates(
-    user,
+    normalizedUser,
     profiles,
     likes,
     isBoosted,

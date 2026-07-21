@@ -117,7 +117,25 @@ function runTests() {
   assert(countryKb.includes('filter_country_all'), 'country filter has all countries button');
   assert(countryKb.includes('Все страны ✅'), 'country filter marks all countries by default');
 
-  store.updateUser(male.id, { filters: { ...male.filters, city: '*' } });
+  store.createMockProfile({
+    gender: 'female',
+    age: 27,
+    city: 'Казань',
+    name: 'Leila',
+    about: 'y'.repeat(30),
+    photo: 'photo500_1',
+  });
+
+  store.updateUser(male.id, { filters: { ageFrom: 18, ageTo: 80, city: '', country: '' } });
+  const myCityOnly = findNextProfileFromStore(store, store.getUser(male.id));
+  assert(myCityOnly?.city === 'Москва', 'my city filter limits browse to user city');
+
+  store.updateUser(male.id, { filters: { ageFrom: 18, ageTo: 80, city: '*', country: '' } });
+  const allCitiesProfiles = store
+    .listProfiles()
+    .filter((profile) => profile.gender === 'female' && profile.profileComplete && profile.active)
+    .map((profile) => profile.city);
+  assert(allCitiesProfiles.includes('Казань'), 'dataset has female profile in another city');
   const allCitiesMatch = findNextProfileFromStore(store, store.getUser(male.id));
   assert(Boolean(allCitiesMatch), 'findNextProfile with all cities includes other cities');
 
@@ -238,7 +256,7 @@ function runTests() {
   store.updateUser(adminId, { state: 'ready', draft: {} });
 
   const stats = store.getStats();
-  assert(stats.mock === 5, 'mock profiles are added and counted');
+  assert(stats.mock === 6, 'mock profiles are added and counted');
   assert(stats.total >= 2, 'total profiles tracked');
 
   assert(store.data.settings.channelUrl === 'https://vk.com/nikaxbot', 'default channel url');

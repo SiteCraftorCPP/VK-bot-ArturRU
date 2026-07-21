@@ -250,11 +250,12 @@ function hasContacts(text = '') {
   return /(\+?\d[\d\s().-]{7,}|https?:\/\/|vk\.com|t\.me|@\w+)/i.test(text);
 }
 
-const ALL_CITIES = '*';
-
-function defaultFilters() {
-  return { ageFrom: 18, ageTo: 80, city: '', country: '' };
-}
+const {
+  ALL_CITIES,
+  defaultFilters,
+  isAllCities,
+  normalizeFilters,
+} = require('./filters');
 
 function isProfileDataComplete(user) {
   const profile = { ...user, ...user.draft };
@@ -804,7 +805,8 @@ async function browseProfiles(context, user) {
     return;
   }
 
-  const profile = findNextProfile(user);
+  const freshUser = store.getUser(user.id) || user;
+  const profile = findNextProfile(freshUser);
   if (!profile) {
     await context.send({
       message: 'Пока нет подходящих анкет в вашем городе 🌙 Когда появятся новые — бот покажет их здесь.',
@@ -938,7 +940,7 @@ async function showFilters(context, user) {
 }
 
 function formatCityFilterLabel(user) {
-  return user.filters.city === ALL_CITIES ? 'Все города' : (user.city || 'Мой город');
+  return isAllCities(user.filters) ? 'Все города' : (user.city || 'Мой город');
 }
 
 function formatCountryFilterLabel(user) {
@@ -1747,7 +1749,7 @@ async function handlePayload(context, user, payload) {
         return true;
       }
       store.updateUser(user.id, {
-        filters: { ...user.filters, ageFrom: preset.ageFrom, ageTo: preset.ageTo },
+        filters: { ...normalizeFilters(user.filters), ageFrom: preset.ageFrom, ageTo: preset.ageTo },
         state: 'ready',
       });
       await showFilterCityStep(context, store.getUser(user.id));
@@ -1756,26 +1758,26 @@ async function handlePayload(context, user, payload) {
     case 'filter_age_default': {
       const range = keyboards.getDefaultAgeRange(user);
       store.updateUser(user.id, {
-        filters: { ...user.filters, ageFrom: range.ageFrom, ageTo: range.ageTo },
+        filters: { ...normalizeFilters(user.filters), ageFrom: range.ageFrom, ageTo: range.ageTo },
         state: 'ready',
       });
       await showFilterCityStep(context, store.getUser(user.id));
       return true;
     }
     case 'filter_city_my':
-      store.updateUser(user.id, { filters: { ...user.filters, city: '' }, state: 'ready' });
+      store.updateUser(user.id, { filters: { ...normalizeFilters(user.filters), city: '' }, state: 'ready' });
       await showFilterCountryStep(context, store.getUser(user.id));
       return true;
     case 'filter_city_all':
-      store.updateUser(user.id, { filters: { ...user.filters, city: ALL_CITIES }, state: 'ready' });
+      store.updateUser(user.id, { filters: { ...normalizeFilters(user.filters), city: ALL_CITIES }, state: 'ready' });
       await showFilterCountryStep(context, store.getUser(user.id));
       return true;
     case 'filter_country_ru':
-      store.updateUser(user.id, { filters: { ...user.filters, country: 'RU' }, state: 'ready' });
+      store.updateUser(user.id, { filters: { ...normalizeFilters(user.filters), country: 'RU' }, state: 'ready' });
       await finishFiltersAndReturnToMenu(context, store.getUser(user.id));
       return true;
     case 'filter_country_all':
-      store.updateUser(user.id, { filters: { ...user.filters, country: '' }, state: 'ready' });
+      store.updateUser(user.id, { filters: { ...normalizeFilters(user.filters), country: '' }, state: 'ready' });
       await finishFiltersAndReturnToMenu(context, store.getUser(user.id));
       return true;
     case 'filter_reset':

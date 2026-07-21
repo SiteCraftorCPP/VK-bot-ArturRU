@@ -1,4 +1,5 @@
 const { Keyboard } = require('vk-io');
+const { isAllCities } = require('./filters');
 
 function payload(action, data = {}) {
   return { action, ...data };
@@ -169,7 +170,7 @@ function filterAge(user) {
 
 function filterCity(user) {
   const myCity = user.city || 'Мой город';
-  const isAll = user.filters.city === '*';
+  const isAll = isAllCities(user.filters);
 
   return appendFilterMenu(
     Keyboard.builder()

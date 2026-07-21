@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { normalizeFilters } = require('./filters');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
@@ -64,7 +65,12 @@ class Store {
   }
 
   getUser(id) {
-    return this.data.users[String(id)] || null;
+    const user = this.data.users[String(id)] || null;
+    if (!user) {
+      return null;
+    }
+    user.filters = normalizeFilters(user.filters);
+    return user;
   }
 
   ensureUser(id) {
